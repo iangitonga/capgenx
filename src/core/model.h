@@ -8,8 +8,8 @@ namespace capgen {
 
 class Whisper {
 private:
-  const std::string encoder_path_ = "../assets/models/traced_encoder.pt";
-  const std::string decoder_path_ = "../assets/models/traced_decoder.pt";
+  const std::string encoder_path_ = "./assets/models/tiny/traced_encoder.pt";
+  const std::string decoder_path_ = "./assets/models/tiny/traced_decoder.pt";
   torch::jit::script::Module encoder_;
   torch::jit::script::Module decoder_;
 

@@ -1,6 +1,8 @@
 [submodule "third_party/wxWidgets"]
 	path = third_party/wxWidgets
 	url = https://github.com/wxWidgets/wxWidgets
+	ignore = dirty
 [submodule "third_party/ffmpeg"]
 	path = third_party/ffmpeg
 	url = https://github.com/FFmpeg/FFmpeg
+	ignore = dirty

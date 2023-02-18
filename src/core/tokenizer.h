@@ -7,7 +7,7 @@ namespace capgen {
 class Tokenizer {
 
 private:
-  const std::string vocab_filename_ = "../assets/multilingual_vocab.txt";
+  const std::string vocab_filename_ = "./assets/multilingual_vocab";
   // Max number of characters a token can have. This value is large enough to contain the
   // longest token.
   const int token_size_ = 40;

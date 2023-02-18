@@ -7,7 +7,7 @@
 #include <filesystem>
 #include <functional>
 
-#include "audio.h"
+#include "audio/audio.h"
 #include "decoder.h"
 #include "model.h"
 #include "tokenizer.h"

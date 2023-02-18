@@ -1,7 +1,7 @@
 #include <torch/torch.h>
 #include "caudio.h"
 #include "audio.h"
-#include "utils.h"
+#include "core/utils.h"
 
 
 namespace capgen {

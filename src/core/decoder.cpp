@@ -41,7 +41,7 @@ static void apply_timestamp_rules(torch::Tensor& logits, const torch::Tensor& to
     }
   }
 
-  double precision = 30 / 448;
+  double precision = 30.0 / 448.0;
   // Initial timestamp cannot be later than this.
   double max_initial_timestamp = 1.0;
   int max_initial_timesamp_index = round(max_initial_timestamp / precision);
@@ -129,7 +129,7 @@ void greedy_decode_segment(Whisper& model, const Tokenizer& tokenizer,
 
 
 void greedy_decode_segment_realtime(Whisper& model, const Tokenizer& tokenizer,
-                   const torch::Tensor& spectrogram, const int segment_index) {
+                                    const torch::Tensor& spectrogram, const int segment_index) {
   const torch::Tensor audio_features = model.embed_audio(spectrogram);
   torch::Tensor tokens = torch::tensor({{tokenizer.sot, 50259, tokenizer.transcribe, tokenizer.no_timestamps}});
   for (int i = 0; i < model.n_ctx; ++i) {

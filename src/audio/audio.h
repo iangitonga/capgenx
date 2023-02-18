@@ -10,7 +10,7 @@ namespace capgen {
 class AudioDecoder {
 private:
   // TODO: May not work on Windows.
-  const std::string mel_filters_path_ = "../assets/mel_80.bin";
+  const std::string mel_filters_path_ = "./assets/mel_80";
 
   const torch::Tensor get_audio_tensor_() const;
   const torch::Tensor get_mel_filters_() const;
