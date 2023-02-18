@@ -34,11 +34,6 @@ Before starting the build process ensure you have the following:
 ```
 sudo apt-get install make cmake nasm gtk+-3.0
 ```
-- **Libtorch** CPU binaries which can be obtain by:
-```
-wget -P third_party/ https://download.pytorch.org/libtorch/nightly/cpu/libtorch-shared-with-deps-latest.zip
-unzip third_party/libtorch-shared-with-deps-latest.zip
-```
 
 Build the application by running the following commands:
 
