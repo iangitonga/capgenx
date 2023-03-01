@@ -1,6 +1,6 @@
 # Capgen
 Capgen is an application that transcribes audio and video using [Whisper](https://openai.com/blog/whisper/) neural network created by
-OpenAI. It has a minimal UI that makes it easier for absolutely anyone can use to transcribe all sorts
+OpenAI. It has a minimal UI that makes it easier for absolutely anyone can use to transcribe or translate all sorts
 of audio and videos such as podcasts, movies, documentaries, etc. Capgen is also
 available as a Python command line application [here](https://github.com/iangitonga/capgen).
 
@@ -9,9 +9,7 @@ As of now, Capgen is in development and lacks many important features but
 that will change as new features get integrated. Some of the limitations are:
 
 - No GPU support. Libtorch GPU library integration has not been tested.
-- Only the tiny English model is available.
 - Only greedy decoding is available.
-
 
 ## Architecture
 Capgen is written entirely in C++ and C. It depends on the following libraries:
@@ -30,9 +28,10 @@ Before starting the build process ensure you have the following:
 - **GNU Make**: Builds the application.
 - **Nasm** or **Yasm** assembler. Required to build FFmpeg.
 - **Gtk+-3.0**: Required to build wxWidgets on **Linux**.
+- **Libcurl**: Required to allow downloading ability.
 - You can install all of these by running:
 ```
-sudo apt-get install make cmake nasm gtk+-3.0
+sudo apt-get install make cmake nasm gtk+-3.0 libcurl4-openssl-dev
 ```
 
 Build the application by running the following commands:

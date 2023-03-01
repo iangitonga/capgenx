@@ -22,7 +22,11 @@ set(wxUSE_MEDIACTRL 0)
 set(wxUSE_OPENGL 0)
 set(wxUSE_DEBUGREPORT 0)
 set(wxUSE_XML 0)
-set(wxUSE_PROTOCOL_FTP 0)
+
+set(wxUSE_WEBREQUEST 1)
+# Linux-only. TODO: Provide for WIN and MAC 
+set(wxUSE_WEBREQUEST_CURL 1)
+
 add_subdirectory("third_party/wxWidgets")
 
 
@@ -57,7 +61,7 @@ target_link_libraries(${PROJECT_NAME} z)
 target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES})
 
 # Wxwidgets
-target_link_libraries(${PROJECT_NAME} wx::core wx::base)
+target_link_libraries(${PROJECT_NAME} wx::net wx::core wx::base)
 
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)

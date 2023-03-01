@@ -1,33 +1,42 @@
-#include <torch/script.h>
 #include <vector>
 #include "model.h"
 
+
 namespace capgen {
 
-Whisper::Whisper() {
+Whisper::Whisper(const std::string &name)
+  : m_name(name)
+{
+  std::cout << "[INFO]: Loading models\n";
   try {
-		encoder_ = torch::jit::load(encoder_path_);
-		decoder_ = torch::jit::load(decoder_path_);
+    std::string encoder_path = std::string("./assets/models/") + m_name + std::string("/traced_encoder.pt");
+    std::string decoder_path = std::string("./assets/models/") + m_name + std::string("/traced_decoder.pt");
+		m_encoder = torch::jit::load(encoder_path);
+		m_decoder = torch::jit::load(decoder_path);
 	} catch (const c10::Error &e) {
-		std::cerr << "Error loading modules!!" << std::endl;
-		throw e;
+		std::cerr << "[ERROR]: Failed to load modules\n";
+		throw;
 	}
+  m_encoder.eval();
+  m_decoder.eval();
+  std::cout << "[INFO]: Models loaded.\n";
 }
 
-const torch::Tensor Whisper::embed_audio(const torch::Tensor& spectrogram) {
-  torch::NoGradGuard no_grad;  // No gradients.
+const at::Tensor Whisper::embed_audio(const at::Tensor& spectrogram) {
+  at::NoGradGuard no_grad;  // No gradients.
   const std::vector<torch::jit::IValue> encoder_inputs = {spectrogram};
-  const torch::Tensor audio_features = encoder_.forward(encoder_inputs).toTensor();
+  const at::Tensor audio_features = m_encoder.forward(encoder_inputs).toTensor();
   return audio_features;
 }
 
-const torch::Tensor Whisper::logits(const torch::Tensor& tokens, 
-                                    const torch::Tensor& audio_features,
-                                    const int cache_index) {
-  torch::NoGradGuard no_grad;  // No gradients.
-  const std::vector<torch::jit::IValue> decoder_inputs = {tokens, audio_features, torch::tensor({cache_index})};
-  const torch::Tensor logits = decoder_.forward(decoder_inputs).toTensor();
+const at::Tensor Whisper::logits(const at::Tensor& tokens, 
+                                 const at::Tensor& audio_features,
+                                 const int cache_index)
+{
+  at::NoGradGuard no_grad;  // No gradients.
+  const std::vector<torch::jit::IValue> decoder_inputs = {tokens, audio_features, at::tensor({cache_index})};
+  const at::Tensor logits = m_decoder.forward(decoder_inputs).toTensor();
   return logits;
 }
 
-}
+}  // namespace capgen

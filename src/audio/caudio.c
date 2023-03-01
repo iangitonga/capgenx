@@ -10,6 +10,8 @@ extern "C" {
 #include <libswresample/swresample.h>
 #include <libavutil/opt.h>
 
+#include <math.h>
+
 #include "caudio.h"
 
 #ifdef __cplusplus
@@ -17,8 +19,8 @@ extern "C" {
 #endif
 
 // Performance:
-// 1HR - 125MB mem  - 10sec decoding.
-// 3HR - 375MB mem  - 30sec decoding.
+// 1HR audio - 125MB memory  - 10sec decoding.
+// 3HR audio - 375MB memory - 30sec decoding.
 
 
 #define OUT_SAMPLE_RATE 16000UL
@@ -36,24 +38,36 @@ void capi_enable_logging() {
   av_log_set_level(AV_LOG_INFO);
 }
 
+uint64_t bytes_to_mb(uint64_t bytes) {
+  uint64_t out = (uint64_t)ceil((double_t)bytes / (double_t)1000000);
+  return out;
+}
+
 
 AudioDecodeOutput *capi_alloc_audio_decode_output() {
   AudioDecodeOutput *dec_out = (AudioDecodeOutput *)malloc(sizeof(AudioDecodeOutput));
   if (!dec_out)
     return dec_out;
   // Default buffer size is the number of bytes needed to hold 30min-long(1800secs) audio samples.
-  uint64_t default_buf_size = OUT_SAMPLE_SIZE * OUT_SAMPLE_RATE * 1200UL;
+  uint64_t default_buf_size = OUT_SAMPLE_SIZE * OUT_SAMPLE_RATE * 1800UL;
   dec_out->buf = (uint8_t *)malloc(default_buf_size);
   if (!(dec_out->buf)) {
     free(dec_out);
+    fprintf(stderr,
+           "[ERROR]: Could not allocate %ldMB for initial audio decoding buffer.\n",
+           bytes_to_mb(default_buf_size)
+    );
     return NULL;
   }
+  fprintf(stdout,
+          "[INFO]: Allocated %ldMB for initial audio decoding buffer.\n",
+          bytes_to_mb(default_buf_size)
+  );
   dec_out->tot_buf_size = default_buf_size;
   dec_out->used_buf_size = 0;
   dec_out->num_samples = 0;
   return dec_out;
 }
-
 
 void capi_free_audio_decode_output(AudioDecodeOutput **dec_out) {
   // Checks ensure that correct results are attained even if this function is called
@@ -61,13 +75,15 @@ void capi_free_audio_decode_output(AudioDecodeOutput **dec_out) {
   if (!(*dec_out))
     return;
   if (!((*dec_out)->buf)) {
-    free(*(dec_out));
-    *(dec_out) = NULL;
+    free(*dec_out);
+    *dec_out = NULL;
     return;
   }
+  uint64_t buf_size = (*dec_out)->tot_buf_size;
   free((*dec_out)->buf);
   free(*(dec_out));
-  *(dec_out) = NULL;
+  *dec_out = NULL;
+  fprintf(stdout, "[INFO]: Freed %ldMB audio decoding buffer.\n", bytes_to_mb(buf_size));
 }
 
 static int _shrink_decode_output_to_fit(AudioDecodeOutput *dec_out);
@@ -82,8 +98,7 @@ int capi_get_audio_signal(const char *infilepath, AudioDecodeOutput *dec_out) {
   ret = _shrink_decode_output_to_fit(dec_out);
   if (ret < 0) 
     return -1;
-  int64_t decoded_mb = dec_out->used_buf_size / 1000000;
-  av_log(NULL, AV_LOG_INFO, "~Decoded %ldMB successfully.\n", decoded_mb);
+  fprintf(stdout, "[INFO]: Decoded %ldMB successfully.\n", bytes_to_mb(dec_out->used_buf_size));
   return 0;
 }
 
@@ -106,10 +121,18 @@ static int _shrink_decode_output_to_fit(AudioDecodeOutput *dec_out) {
     return 0;
   uint8_t *new_buf = (uint8_t *)realloc(dec_out->buf, dec_out->used_buf_size);
   if (!new_buf) {
-    av_log(NULL, AV_LOG_ERROR, "~Failed to shrink from %ld bytes to %ld bytes.\n",
-           dec_out->tot_buf_size, dec_out->used_buf_size);
+    fprintf(stderr,
+           "[ERROR]: Failed to shrink from %ldMB to %ldMB.\n",
+           bytes_to_mb(dec_out->tot_buf_size),
+           bytes_to_mb(dec_out->used_buf_size)
+    );
     return -1;
   }
+  fprintf(stdout,
+          "[INFO]: Shrunk audio buffer from %ldMB to %ldMB.\n",
+          bytes_to_mb(dec_out->tot_buf_size),
+          bytes_to_mb(dec_out->used_buf_size)
+  );
   dec_out->buf = new_buf;
   dec_out->tot_buf_size = dec_out->used_buf_size;
   return 0;
@@ -137,9 +160,13 @@ static int _write_internal(const uint8_t *inbuf,
     size_t new_tot_size = new_tot_secs * OUT_SAMPLE_RATE * OUT_SAMPLE_SIZE;
     uint8_t *new_buf = (uint8_t *)realloc(dec_out->buf, new_tot_size);
     if (!new_buf) {
-      av_log(NULL, AV_LOG_ERROR, "~Failed to expand signal buf to %ld bytes\n", new_tot_size);
+      fprintf(stderr,
+              "[ERROR]: Failed to expand signal buf to %ldMB.\n",
+              bytes_to_mb(new_tot_size)
+      );
       return -1;
     }
+    fprintf(stdout, "[INFO]: Reallocated from %ldMB to %ldMB.\n", bytes_to_mb(dec_out->tot_buf_size), bytes_to_mb(new_tot_size));
     dec_out->buf = new_buf;
     dec_out->tot_buf_size = new_tot_size;
   }
@@ -161,7 +188,7 @@ static int _write_frames_to_output(SwrContext *sampler_ctx,
   // Decode the coded frame from the packet.
   int ret = avcodec_send_packet(codec_ctx, packet);
   if (ret < 0) {
-    av_log(NULL, AV_LOG_ERROR, "~Failed to decode sent packet.\n");
+    fprintf(stderr, "[ERROR]: Failed to decode sent packet.\n");
     return -1;
   }
 
@@ -171,7 +198,7 @@ static int _write_frames_to_output(SwrContext *sampler_ctx,
     if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
       break;
     } else if (ret < 0) {
-      av_log(NULL, AV_LOG_ERROR, "~Failed to fetch sent packet into the frame.\n");
+      fprintf(stderr, "[ERROR]: Failed to fetch sent packet into the frame.\n");
       return -1;
     }
 
@@ -182,7 +209,7 @@ static int _write_frames_to_output(SwrContext *sampler_ctx,
     size_t tot_out_bytes = n_max_out_samples * OUT_SAMPLE_SIZE;
     uint8_t *outbuf = (uint8_t*)malloc(tot_out_bytes);
     if (!outbuf) {
-      av_log(NULL, AV_LOG_ERROR, "~Failed to allocate %ld bytes for reampling\n", tot_out_bytes);
+      fprintf(stderr, "[ERROR]: Failed to allocate %ldMB for resampling.\n", bytes_to_mb(tot_out_bytes));
       return -1;
     }
     // `data[0]` is a pointer to the first channel data.
@@ -190,7 +217,7 @@ static int _write_frames_to_output(SwrContext *sampler_ctx,
     /// TODO: Could we use the `dec_out` buffer directly instead of intermediate buffer?
     int n_output_samples = swr_convert(sampler_ctx, &outbuf, n_max_out_samples, inbuf, n_in_samples);
     if (n_output_samples < 0) {
-      av_log(NULL, AV_LOG_ERROR, "~Failed to resample.\n");
+      fprintf(stderr, "[ERROR]: Failed to resample.\n");
       free(outbuf);
       return -1;
     }
@@ -220,7 +247,7 @@ static int _set_up_sampler(SwrContext *sampler_ctx,
   av_opt_set_int(sampler_ctx, "out_sample_rate", OUT_SAMPLE_RATE, 0);
   av_opt_set_sample_fmt(sampler_ctx, "out_sample_fmt", OUT_SAMPLE_FMT, 0);
   if (swr_init(sampler_ctx) < 0) {
-    av_log(NULL, AV_LOG_ERROR, "~Failed to initialise sampler context.\n");
+    fprintf(stderr, "[ERROR]: Failed to initialise sampler context.\n");
     return -1;
   }
   return 0;
@@ -233,59 +260,59 @@ static int _decode_audio_internal(AVFormatContext *fmt_ctx,
                                  AudioDecodeOutput *dec_out)
 {
   if (codec_params->codec_type != AVMEDIA_TYPE_AUDIO) {
-    av_log(NULL, AV_LOG_ERROR, "~Codec parameters not for audio.\n");
+    fprintf(stderr, "[ERROR]: Codec parameters not for audio.\n");
     return -1;
   }
   // Finds a registered decoder with the given codec ID.
   const AVCodec *codec = avcodec_find_decoder(codec_params->codec_id);
   if (!codec) {
-    av_log(NULL, AV_LOG_ERROR, "~Failed to find a registered codec decoder.\n");
+    fprintf(stderr, "[ERROR]: Failed to find a registered codec decoder.\n");
     return -1;
   }
-  av_log(NULL, AV_LOG_INFO,
-   "~Ch=%d, sr=%d, bitrate=%ld\n",
-    codec_params->ch_layout.nb_channels, codec_params->sample_rate, codec_params->bit_rate
-  );
+  // av_log(NULL, AV_LOG_INFO,
+  //  "~Ch=%d, sr=%d, bitrate=%ld\n",
+  //   codec_params->ch_layout.nb_channels, codec_params->sample_rate, codec_params->bit_rate
+  // );
   // Holds data and information for the decoder.
   AVCodecContext *codec_ctx = avcodec_alloc_context3(codec);
   if (!codec_ctx) {
-    av_log(NULL, AV_LOG_ERROR, "~Codec context alloc failed.\n");
+    fprintf(stderr, "[ERROR]: Codec context alloc failed.\n");
     return -1;
   }
   // Fills the codec context based on the values from the supplied codec parameters.
   int ret = avcodec_parameters_to_context(codec_ctx, codec_params);
   if (ret < 0) {
-    av_log(NULL, AV_LOG_ERROR, "~Failed to fill codec context with codec params.\n");
+    fprintf(stderr, "[ERROR]: Failed to fill codec context with codec params.\n");
     goto error_1;
   }
   av_log(NULL, AV_LOG_INFO, "~Raw audio format: %s\n", av_get_sample_fmt_name(codec_ctx->sample_fmt));
   // Initialize the codec context to use the given codec.
   if (avcodec_open2(codec_ctx, codec, NULL) < 0) {
-    av_log(NULL, AV_LOG_ERROR, "~Failed to initialize codec context.\n");
+    fprintf(stderr, "[ERROR]: Failed to initialize codec context.\n");
     goto error_1;
   }
   // Holds compressed packet data.
   AVPacket *packet = av_packet_alloc();
   if (!packet) {
-    av_log(NULL, AV_LOG_ERROR, "~Failed to allocate a packet.\n");
+    fprintf(stderr, "[ERROR]: Failed to allocate a packet.\n");
     goto error_1;
   }
   // Holds uncompressed(raw) data.
   AVFrame *frame = av_frame_alloc();
   if (!frame) {
-    av_log(NULL, AV_LOG_ERROR, "~Failed to allocate a frame.\n");
+    fprintf(stderr, "[ERROR]: Failed to allocate a frame.\n");
     goto error_2;
   }
 
   // Sets up the resampler;
   SwrContext *sampler_ctx = swr_alloc();
   if (!sampler_ctx) {
-    av_log(NULL, AV_LOG_ERROR, "~Failed to allocate sampler context.\n");
+    fprintf(stderr, "[ERROR]: Failed to allocate a sampler context.\n");
     goto error_3;
   }
   ret = _set_up_sampler(sampler_ctx, codec_ctx, codec_params);
   if (ret < 0) {
-    av_log(NULL, AV_LOG_ERROR, "~Failed to set sampler values\n");
+    fprintf(stderr, "[ERROR]: Failed to set sampler values.\n");
     goto error_4;
   }
 
@@ -334,21 +361,25 @@ error_4:
 static int _decode_audio(const char *infilepath, AudioDecodeOutput *dec_out) {
   // Holds inforation about format(container) which is used to perform format I/O.
   AVFormatContext *fmt_ctx = avformat_alloc_context();
+  if (!fmt_ctx) {
+    fprintf(stderr, "[ERROR]: Failed to allocate format context.\n");
+    return -1;
+  }
   // Opens the input in the given path and reads header information to the
   // given format context.
   int ret = avformat_open_input(&fmt_ctx, infilepath, NULL, NULL);
   if (ret < 0) {
-      av_log(NULL, AV_LOG_ERROR, "~Failed to open format context\n");
-      return -1;
+    avformat_free_context(fmt_ctx);
+    fprintf(stderr, "[ERROR]: Failed to open format context input.\n");
+    return -1;
   }
-  av_log(NULL, AV_LOG_INFO, "~Media format: %s\n", fmt_ctx->iformat->long_name);
   // Reads packets of the file to obtain stream information.
   ret = avformat_find_stream_info(fmt_ctx, NULL);
   if (ret < 0) {
-    av_log(NULL, AV_LOG_ERROR, "~Failed to find media file stream information\n");
+    avformat_free_context(fmt_ctx);
+    fprintf(stderr, "[ERROR]: Failed to find media file stream information.\n");
     return -1;
   }
-  av_log(NULL, AV_LOG_INFO, "~Number of streams %d\n", fmt_ctx->nb_streams);
 
   // Decoding phase. Loop through all the streams until we find the first audio stream.
   /// TODO: Allow decoding all available audio streams?
@@ -360,7 +391,6 @@ static int _decode_audio(const char *infilepath, AudioDecodeOutput *dec_out) {
     if (codec_params->codec_type != AVMEDIA_TYPE_AUDIO)
       continue;
     found_audio = 1;
-    av_log(NULL, AV_LOG_INFO, "~Found audio stream: stream %d\n", stream_idx);
     ret = _decode_audio_internal(fmt_ctx, codec_params, stream_idx, dec_out);
     if (ret < 0) {
       avformat_close_input(&fmt_ctx);
@@ -369,7 +399,7 @@ static int _decode_audio(const char *infilepath, AudioDecodeOutput *dec_out) {
     }
   }
   if (!found_audio)
-    av_log(NULL, AV_LOG_INFO, "~Audio stream not found\n");
+    fprintf(stdout, "[INFO]: Audio stream not found.\n");
   // Free input data.
   avformat_close_input(&fmt_ctx);
   // Free format context.

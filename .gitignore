@@ -134,7 +134,10 @@ dmypy.json
 # Local
 .vscode/
 capgenx.code-workspace
-/assets/
-bin/Capgen
 build/
 third_party/libtorch
+/private/
+bin/Capgen
+!bin/assets/models/
+bin/assets/models/*
+!bin/assets/models/tiny.zip
