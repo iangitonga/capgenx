@@ -1,11 +1,13 @@
 // Included in the top so that it includes libTorch first.
 #include "capgen.h"
+#include "core/log.h"
+
+#include <filesystem>
 
 #include <wx/app.h> 
 #include <wx/statline.h>
 #include <wx/webrequest.h>
 #include <wx/wfstream.h>
-
 #include <wx/gdicmn.h>
 #include <wx/imagpng.h>
 
@@ -24,7 +26,7 @@ bool capgen::Application::OnInit() {
 
   capgen::MainWindow *main_window = new capgen::MainWindow();
   main_window->Show();
-  std::cout << "[UI]: Main window has rendered.\n";
+  CG_LOG_MINFO("Application has started");
   return true;
 }
 
@@ -135,21 +137,29 @@ capgen::TranscriptionWidget::TranscriptionWidget(MainWindow *main_window, wxScro
 
   // Task selector
   m_task_choices = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(150, 31));
-  m_task_choices->Append("Transcribe");
+  m_task_choices->Append("English");
+  m_task_choices->Append("Detected language");
   m_task_choices->Append("Translate to English");
   m_task_choices->Select(0);
   wxBoxSizer *task_sizer = new wxBoxSizer(wxVERTICAL);
-  task_sizer->Add(new wxStaticText(this, wxID_ANY, "TASK"),
-                  wxSizerFlags());
+  task_sizer->Add(new wxStaticText(this, wxID_ANY, "CAPTIONS LANGUAGE"),
+                  wxSizerFlags().Align(wxALIGN_CENTER_HORIZONTAL));
   task_sizer->AddSpacer(6);
   task_sizer->Add(m_task_choices);
 
   // Model selector
   m_model_choices = new wxChoice(this, ID_model_selector, wxDefaultPosition, wxSize(150, 31));
-  for (const auto &models_kv : capgen::MODELS)
-    m_model_choices->AppendString(models_kv.first);
-  // TODO: Select medium by default.
-  m_model_choices->Select(0);
+  m_model_choices->AppendString("tiny");
+  m_model_choices->AppendString("base");
+  m_model_choices->AppendString("small");
+  // TODO: Allow models to be sorted and use enums to refer to models instead of strings.
+  std::string default_model_name = m_app.models_manager.get_default_model_name();
+  if (default_model_name == "tiny")
+    m_model_choices->Select(0);
+  else if (default_model_name == "base")
+    m_model_choices->Select(1);
+  else if (default_model_name == "small")
+    m_model_choices->Select(2);
   wxBoxSizer *model_sizer = new wxBoxSizer(wxVERTICAL);
   model_sizer->Add(new wxStaticText(this, wxID_ANY, "MODEL"),
                    wxSizerFlags().Align(wxALIGN_CENTER_HORIZONTAL));
@@ -170,6 +180,8 @@ capgen::TranscriptionWidget::TranscriptionWidget(MainWindow *main_window, wxScro
   wxString file_desc = wxString("File: ") + path;
   wxStaticText *file_text = new wxStaticText(this, wxID_ANY, file_desc);
   file_text->SetFont(text_font);
+  m_out_fpath_text = new wxStaticText(this, wxID_ANY, "");
+  m_out_fpath_text->SetFont(text_font);
   m_status_text = new wxStaticText(this, wxID_ANY, "");
   m_status_text->SetFont(text_font);
 
@@ -183,9 +195,9 @@ capgen::TranscriptionWidget::TranscriptionWidget(MainWindow *main_window, wxScro
   progbar_sizer->Add(m_progbar_text, 0, wxTOP, 8);
 
   // Transcribe button.
-  wxButton *transcribe_btn = new wxButton(this, ID_transcribe_btn, "TRANSCRIBE");
+  m_transcribe_btn = new wxButton(this, ID_transcribe_btn, "GENERATE CAPTIONS");
   wxFont transcribe_btn_font = wxFont(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
-  transcribe_btn->SetFont(transcribe_btn_font);
+  m_transcribe_btn->SetFont(transcribe_btn_font);
 
   // Widget sizer.
   wxBoxSizer *main_sizer = new wxBoxSizer(wxVERTICAL);
@@ -200,9 +212,11 @@ capgen::TranscriptionWidget::TranscriptionWidget(MainWindow *main_window, wxScro
   main_sizer->AddSpacer(4);
   main_sizer->Add(m_status_text, 0, wxGROW | wxLEFT, 15);
   main_sizer->AddSpacer(6);
+  main_sizer->Add(m_out_fpath_text, 0, wxGROW | wxLEFT, 15);
+  main_sizer->AddSpacer(6);
   main_sizer->Add(progbar_sizer, 0, wxGROW | wxLEFT, 15);
   main_sizer->AddSpacer(6);
-  main_sizer->Add(transcribe_btn, 0, wxLEFT, 15);
+  main_sizer->Add(m_transcribe_btn, 0, wxLEFT, 15);
   main_sizer->AddSpacer(20);
   this->SetSizerAndFit(main_sizer);
 
@@ -212,19 +226,30 @@ capgen::TranscriptionWidget::TranscriptionWidget(MainWindow *main_window, wxScro
   Bind(EVT_TRX_THREAD_MODEL_LOADED, &TranscriptionWidget::on_trx_model_load, this, wxID_ANY);
   Bind(EVT_TRX_THREAD_UPDATE, &TranscriptionWidget::on_trx_thread_update, this, wxID_ANY);
   Bind(EVT_TRX_THREAD_COMPLETED, &TranscriptionWidget::on_trx_thread_completion, this,wxID_ANY);
+  Bind(EVT_TRX_THREAD_FAILED, &TranscriptionWidget::on_trx_thread_fail, this, wxID_ANY);
   Bind(wxEVT_TIMER, &TranscriptionWidget::on_timer_update, this, ID_timer);
   Bind(wxEVT_CHOICE, &TranscriptionWidget::on_model_choice_update, this, ID_model_selector);
 }
 
 void capgen::TranscriptionWidget::on_model_choice_update(wxCommandEvent &event) {
   std::string selected = m_model_choices->GetStringSelection().ToStdString();
-  if (!(m_app.m_models_manager.model_is_registered(selected))) {
+  int selected_idx = m_model_choices->GetSelection();
+  if (!(m_app.models_manager.model_is_registered(selected))) {
     ModelDownloadDialog download_dlg(this, selected);
     download_dlg.ShowModal();
     // Check if the model was downloaded and if not, revert to the default model.
-    m_app.m_models_manager.reload_registered_models();
-    if (!(m_app.m_models_manager.model_is_registered(selected)))
-      m_model_choices->Select(0);
+    m_app.models_manager.reload_registered_models();
+    if (!(m_app.models_manager.model_is_registered(selected))) {
+      std::string default_model_name = m_app.models_manager.get_default_model_name();
+      if (default_model_name == "tiny")
+        m_model_choices->Select(0);
+      else if (default_model_name == "base")
+        m_model_choices->Select(1);
+      else if (default_model_name == "small")
+        m_model_choices->Select(2);
+      else
+        m_model_choices->Select(64); // Force selection of none.
+    }
   } 
 }
 
@@ -234,21 +259,34 @@ void capgen::TranscriptionWidget::on_timer_update(wxTimerEvent &event) {
 
 void capgen::TranscriptionWidget::on_trx_btn_click(wxCommandEvent &event) {
   // TODO: string operations not ideal. Replace with a TranscriptionOptions object that
-  // uses enum values for settings. Status: Transcribing
+  // uses enum values for settings.
   std::string selected_task = m_task_choices->GetStringSelection().ToStdString();
-  int task;
-  if (selected_task == "Transcribe")
-    task = capgen::Tokenizer::transcribe;
-  else
-    task = capgen::Tokenizer::translate;
-  std::string selected_model = m_model_choices->GetStringSelection().ToStdString();
-  // Transcribe
-  TranscriptionThread *t_thread = new TranscriptionThread(m_audio_filepath, selected_model, this, task);
-  if (t_thread->Run() != wxTHREAD_NO_ERROR) {
-    wxLogError("[UI]: Transcription thread failed to run");
-    delete t_thread;
+  capgen::ModelType model_type;
+  capgen::TranscriptionTask task;
+  if (selected_task == "English") {
+    model_type = capgen::ModelType::English;
+    task = capgen::TranscriptionTask::Transcribe;
   }
-  std::cout << "[UI]: Run Transcription thread" << std::endl;
+  else {
+    model_type = capgen::ModelType::Multilingual;
+    if (selected_task == "Detected language")
+      task = capgen::TranscriptionTask::Transcribe;
+    else
+      task = capgen::TranscriptionTask::Translate;
+  }
+  std::string selected_model = m_model_choices->GetStringSelection().ToStdString();
+  if (selected_model == "") {
+    wxLogInfo("Please select the model to use in the models selector.");
+    return;
+  }
+  // Transcribe
+  TranscriptionThread *trx_thread = new TranscriptionThread(m_audio_filepath, selected_model, model_type, this, task);
+  if (trx_thread->Run() != wxTHREAD_NO_ERROR) {
+    CG_LOG_ERROR("Transcription thread failed to run for media file: %s", m_audio_filepath.c_str());
+    delete trx_thread;
+    wxLogError("Something went wrong and transcription could not be done. Try restarting the application.");
+  }
+  CG_LOG_INFO("Transcription thread running for media file: %s", m_audio_filepath.c_str());
 }
 
 void capgen::TranscriptionWidget::on_trx_model_load(wxThreadEvent &event) {
@@ -263,9 +301,16 @@ void capgen::TranscriptionWidget::on_trx_thread_completion(wxThreadEvent &event)
   m_main_window->GetToolBar()->EnableTool(ID_video_add, true);
   m_status_text->SetLabelText("Status: Transcription complete!");
   m_status_text->SetForegroundColour(wxColour(0, 255, 0));
+
+  std::filesystem::path infilepath(m_audio_filepath);
+  std::string out_fpath = infilepath.replace_extension("srt").string();
+  std::string label_text = std::string("Captions file: ") + out_fpath;
+  m_out_fpath_text->SetLabelText(label_text);
+  m_out_fpath_text->SetForegroundColour(wxColour(0, 255, 0));
 }
 
 void capgen::TranscriptionWidget::on_trx_thread_start(wxThreadEvent &event) {
+  m_transcribe_btn->Disable();
   m_timer.Start(100);
   m_status_text->SetLabelText("Status: Loading the model ...");
   m_progbar->Pulse();
@@ -278,15 +323,25 @@ void capgen::TranscriptionWidget::on_trx_thread_update(TranscriptionUpdateEvent 
   m_progbar_text->SetLabelText(label);
 }
 
+void capgen::TranscriptionWidget::on_trx_thread_fail(wxThreadEvent &event) {
+  m_transcribe_btn->Enable();
+  m_timer.Stop();
+  m_progbar->SetValue(0);
+  // TODO: Set red color.
+  m_status_text->SetLabelText("Status: Transcription failed!");
+  wxLogError("An unexpected error occurred during transcription process. Try restarting the application.");
+}
+
 capgen::TranscriptionThread::TranscriptionThread(std::string &path,
                                                  std::string &model_name,
+                                                 capgen::ModelType model_type,
                                                  TranscriptionWidget *widget,
-                                                 int task)
-  : wxThread(wxTHREAD_DETACHED), m_audio_path(path), m_model_name(model_name), m_widget(widget), m_trx_task(task)
+                                                 TranscriptionTask task)
+  : wxThread(wxTHREAD_DETACHED), m_audio_path(path), m_model_name(model_name), m_model_type(model_type), m_widget(widget), m_trx_task(task)
   {}
 
 capgen::TranscriptionThread::~TranscriptionThread() {
-  std::cout << "[UI]: Deleting Transcription thread" << std::endl;
+  CG_LOG_MINFO("Deleting Transcription thread");
 }
 
 // Code run by transcription thread. The transcription thread does not run any code
@@ -302,14 +357,15 @@ void *capgen::TranscriptionThread::Entry() {
   if (!TestDestroy()) {
     wxQueueEvent(m_widget, new wxThreadEvent(EVT_TRX_THREAD_START));
     try {
-      auto model = m_widget->m_app.m_models_manager.get_model(m_model_name);
+      auto model = m_widget->m_app.models_manager.get_model(m_model_name, m_model_type);
       wxQueueEvent(m_widget, new wxThreadEvent(EVT_TRX_THREAD_MODEL_LOADED));
       capgen::transcribe(m_audio_path, model, m_trx_task, update_cb);
+      wxQueueEvent(m_widget, new wxThreadEvent(EVT_TRX_THREAD_COMPLETED));
     } catch (const std::exception &e) {
-      std::cout << e.what() << std::endl;
+      wxQueueEvent(m_widget, new wxThreadEvent(EVT_TRX_THREAD_FAILED));
+      CG_LOG_MERROR(e.what());
     }
   }
-  wxQueueEvent(m_widget, new wxThreadEvent(EVT_TRX_THREAD_COMPLETED));
   return (void *)0;
 }
 
@@ -326,9 +382,6 @@ capgen::ModelDownloadDialog::ModelDownloadDialog(wxWindow *parent, const std::st
   const std::string model_dl_size_s = std::string("Download Size: ") + std::to_string(m_model_info.dl_size_mb) + "MB";
   wxStaticText *model_dl_size_text = new wxStaticText(this, wxID_ANY, model_dl_size_s);
   model_dl_size_text->SetFont(text_font);
-  const std::string model_disk_size_s = std::string("Disk Size: ") + std::to_string(m_model_info.disk_size_mb) + "MB";
-  wxStaticText *model_disk_size_text = new wxStaticText(this, wxID_ANY, model_disk_size_s);
-  model_disk_size_text->SetFont(text_font);
   const std::string memory_usage_s = std::string("Memory Usage: ") + std::to_string(m_model_info.mem_usage_mb) + "MB";
   wxStaticText *memory_usage_text = new wxStaticText(this, wxID_ANY, memory_usage_s);
   memory_usage_text->SetFont(text_font);
@@ -348,7 +401,6 @@ capgen::ModelDownloadDialog::ModelDownloadDialog(wxWindow *parent, const std::st
   m_sizer = new wxBoxSizer(wxVERTICAL);
   m_sizer->Add(model_name_text, 0, wxTOP | wxLEFT, 10);
   m_sizer->Add(model_dl_size_text, 0, wxTOP | wxLEFT, 10);
-  m_sizer->Add(model_disk_size_text, 0, wxTOP | wxLEFT, 10);
   m_sizer->Add(memory_usage_text, 0, wxTOP | wxLEFT, 10);
   m_sizer->AddSpacer(60);
   m_sizer->AddSpacer(40); // Extra space that accounts for hidden status and gauge. See below.
@@ -359,9 +411,9 @@ capgen::ModelDownloadDialog::ModelDownloadDialog(wxWindow *parent, const std::st
   SetSizer(m_sizer);
 
   // Download status items hidden until user clicks download button.
-  m_sizer->Hide(6); // Download status text
-  m_sizer->Hide(7); // Download status gauge
-  m_sizer->Hide(9); // Close button.
+  m_sizer->Hide(5); // Download status text
+  m_sizer->Hide(6); // Download status gauge
+  m_sizer->Hide(8); // Close button.
   m_sizer->Layout();
 
   Bind(wxEVT_BUTTON, &ModelDownloadDialog::on_dl_btn_click, this, ID_model_dl_btn);
@@ -370,9 +422,9 @@ capgen::ModelDownloadDialog::ModelDownloadDialog(wxWindow *parent, const std::st
 
 void capgen::ModelDownloadDialog::on_dl_btn_click(wxCommandEvent &evt) {
   m_dl_btn->Disable();
-  m_sizer->Hide(5); // Extra padding space.
-  m_sizer->Show((size_t)6);  // Download status text
-  m_sizer->Show((size_t)7);  // Download status gauge
+  m_sizer->Hide(4); // Extra padding space.
+  m_sizer->Show((size_t)5);  // Download status text
+  m_sizer->Show((size_t)6);  // Download status gauge
   m_sizer->Layout();
 
   download_model();
@@ -383,18 +435,21 @@ void capgen::ModelDownloadDialog::on_dl_btn_close_click(wxCommandEvent &evt) {
 }
 
 void capgen::ModelDownloadDialog::download_model() {
+  CG_LOG_INFO("Model download started for model=%s, url=%s", m_model_name.c_str(), m_model_info.url);
   wxWebRequest request = wxWebSession::GetDefault().CreateRequest(this, m_model_info.url);
   // Allows progress monitoring of the download process.
   request.SetStorage(wxWebRequest::Storage::Storage_None);
   if (!request.IsOk()) {
-    std::cout << "REQ is not OK.\n";
+    wxLogError("An internet connection could not be established. Check your internet connection status.");
+    CG_LOG_MERROR("Model download request is not OK");
     return;
   }
 
   std::string out_fpath = std::string("./assets/models/") + m_model_name + ".zip";
   std::shared_ptr<wxFileOutputStream> out_stream = std::make_shared<wxFileOutputStream>(out_fpath);
   if (!out_stream->IsOk()) {
-    std::cout << "[ERROR]: Failed to open output file.\n";
+    wxLogError("A file to store the downloaded model could not be created at %s.", out_fpath);
+    CG_LOG_ERROR("Failed to open model download output file: %s", out_fpath.c_str());
     return;
   }
 
@@ -402,24 +457,26 @@ void capgen::ModelDownloadDialog::download_model() {
   Bind(wxEVT_WEBREQUEST_STATE, [request, out_fpath, this](wxWebRequestEvent& evt) {
     switch (evt.GetState()) {
       case wxWebRequest::State_Completed: {
-        std::cout << "Downloaded\n";
+        CG_LOG_MINFO("Model download complete");
         m_dl_status->SetLabelText("Download Complete!");
-        m_sizer->Hide((size_t)8);  // Download button.
-        m_sizer->Show((size_t)9);  // Close button.
+        m_sizer->Hide((size_t)7);  // Download button.
+        m_sizer->Show((size_t)8);  // Close button.
         std::string archive_outdir = std::string("./assets/models/") + m_model_name + "/";
         if (wxMkdir(archive_outdir)) {
           capgen::extract_downloaded_model(out_fpath, archive_outdir);
           m_dl_gauge->SetValue(100);
           wxRemoveFile(out_fpath);
         } else {
-          std::cout << "Failed to make directory\n";
+          wxLogError("A directory to store the models be created at %s.", archive_outdir);
+          CG_LOG_ERROR("Failed to create output directory for downloaded model at %s", archive_outdir.c_str());
         }
         break;
       }
       // Request failed
       case wxWebRequest::State_Failed: {
         m_dl_btn->Enable();
-        wxLogError("Error: %s", evt.GetErrorDescription());
+        wxLogError("An internet connection could not be established. Check your internet connection status.");
+        CG_LOG_ERROR("Connection Error: %s", evt.GetErrorDescription().ToStdString().c_str());
         break;
       }
     }

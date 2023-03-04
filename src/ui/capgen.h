@@ -21,7 +21,7 @@ class Application : public wxApp {
 public:
   virtual bool OnInit();
 
-  ModelsManager m_models_manager = ModelsManager();
+  ModelsManager models_manager = ModelsManager();
 };
 
 
@@ -73,10 +73,12 @@ public:
   Application& m_app;
   MainWindow *m_main_window;
   wxStaticText *m_progbar_text;
+  wxStaticText *m_out_fpath_text;
   wxGauge *m_progbar;
   wxStaticText *m_status_text;
   wxChoice *m_model_choices;
   wxChoice *m_task_choices;
+  wxButton *m_transcribe_btn;
   std::string m_audio_filepath;
   // Timer allows us to display indeterminate progress bar when loading the model. 
   wxTimer m_timer;
@@ -89,6 +91,7 @@ public:
   void on_trx_thread_completion(wxThreadEvent& evt);
   void on_trx_thread_start(wxThreadEvent& evt);
   void on_trx_thread_update(TranscriptionUpdateEvent& evt);
+  void on_trx_thread_fail(wxThreadEvent &evt);
 };
 
 
@@ -96,10 +99,15 @@ class TranscriptionThread : public wxThread {
 public:
   std::string m_audio_path;
   std::string m_model_name;
+  ModelType m_model_type;
   TranscriptionWidget *m_widget;
-  int m_trx_task;
+  TranscriptionTask m_trx_task;
 
-  TranscriptionThread(std::string &path, std::string &model_name, TranscriptionWidget *widget, int task);
+  TranscriptionThread(std::string &path,
+                      std::string &model_name,
+                      ModelType model_type,
+                      TranscriptionWidget *widget,
+                      TranscriptionTask task);
   ~TranscriptionThread();
   virtual void *Entry();
 };
@@ -109,7 +117,7 @@ wxDEFINE_EVENT(EVT_TRX_THREAD_START, wxThreadEvent);
 wxDEFINE_EVENT(EVT_TRX_THREAD_MODEL_LOADED, wxThreadEvent);
 wxDEFINE_EVENT(EVT_TRX_THREAD_COMPLETED, wxThreadEvent);
 wxDEFINE_EVENT(EVT_TRX_THREAD_UPDATE, TranscriptionUpdateEvent);
-
+wxDEFINE_EVENT(EVT_TRX_THREAD_FAILED, wxThreadEvent);
 
 // Model download wizard
 class ModelDownloadDialog : public wxDialog {

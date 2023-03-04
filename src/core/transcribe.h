@@ -1,17 +1,17 @@
 #pragma once
 
-#include <string>
-#include <vector>
-#include <filesystem>
-#include <functional>
-
-#include "audio.h"
-#include "decoder.h"
 #include "model.h"
-#include "tokenizer.h"
-#include "utils.h"
+
+#include <string>
+#include <functional>
+#include <memory>
 
 namespace capgen {
+
+enum TranscriptionTask {
+  Transcribe,
+  Translate
+};
 
 /// @brief Transcribe the media file in the given path.
 /// @param path path to the media file.
@@ -19,7 +19,7 @@ namespace capgen {
 ///   off to the nearest int.
 void transcribe(std::string &path,
                 std::shared_ptr<Whisper> whisper,
-                int task,
+                TranscriptionTask task,
                 std::function<void(float)> update_callback);
 
 }; // namespace capgen

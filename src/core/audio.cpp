@@ -1,5 +1,6 @@
 #include "audio/caudio.h"
 #include "audio.h"
+#include "log.h"
 #include "utils.h"
 
 
@@ -25,8 +26,8 @@ const at::Tensor AudioDecoder::get_audio_spectrogram(const char *infilepath) con
     throw std::exception();
   const at::Tensor audio = get_audio_tensor();
   const at::Tensor spectrogram = get_audio_spectrogram(audio);
-  const at::Tensor padded_spectrogram = pad_audio_spectrogram(spectrogram);
-  return padded_spectrogram;
+  // const at::Tensor padded_spectrogram = pad_audio_spectrogram(spectrogram);
+  return spectrogram;
 }
 
 const at::Tensor AudioDecoder::get_audio_tensor() const {
@@ -39,13 +40,17 @@ const at::Tensor AudioDecoder::get_audio_tensor() const {
 
 const at::Tensor AudioDecoder::get_mel_filters() const {
   FILE *spec_file = fopen(m_mel_filters_path, "rb");
-  if (!spec_file)
+  if (!spec_file) {
+    CG_LOG_ERROR("Failed to open file %s", m_mel_filters_path);
     throw std::exception();
+  }
   int filtersize = 80 * 201;
   // A temporary data to hold the filter data before it is copied to a tensor.
   float buf[filtersize];
   // TODO: Use C++ streams.
-  std::fread(buf, sizeof(float_t), filtersize, spec_file);
+  int read_bytes = std::fread(buf, sizeof(float_t), filtersize, spec_file);
+  if (read_bytes < filtersize)
+    CG_LOG_WARNING("Read mel filter data is less than expected: expected=%d, read=%d", filtersize, read_bytes);
   std::fclose(spec_file);
   auto filter_ref = at::makeArrayRef(buf, filtersize);
   const at::Tensor filter = at::tensor(filter_ref);
@@ -64,16 +69,6 @@ const at::Tensor AudioDecoder::get_audio_spectrogram(const at::Tensor& audio) co
   const at::Tensor log_spec_max = at::maximum(log_spec, log_spec.max() - 8.0);
   const at::Tensor out_spec = (log_spec_max + 4.0) / 4.0;
   return out_spec.view({1, 80, -1});
-}
-
-const at::Tensor AudioDecoder::pad_audio_spectrogram(const at::Tensor& spectrogram) const {
-  const int64_t n_audio_frames = spectrogram.size(2);
-  if ((n_audio_frames % 3000) == 0)
-    return spectrogram;
-  const int quotient = exact_div(n_audio_frames, 3000);
-  const int64_t pad_diff = ((quotient * 3000) + 3000) - n_audio_frames;
-  const at::Tensor padded_spectrogram = at::pad(spectrogram, {0, pad_diff, 0, 0});
-  return padded_spectrogram;
 }
 
 } // namespace capgen.

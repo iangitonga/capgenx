@@ -1,20 +1,9 @@
 #include <cstdio>
 #include <vector>
 #include "decoder.h"
+#include "log.h"
 #include "tokenizer.h"
 #include "utils.h"
-
-static const auto s_forbidden_tokens_ops = at::TensorOptions(at::kLong);
-static const torch::Tensor s_forbidden_tokens = torch::tensor(
-  {1,2,7,8,9,10,14,25,26,27,28,29,31,58,59,60,61,62,63,90,91,92,93,220,359,503,522,
-  542,873,893,902,918,922,931,1350,1853,1982,2460,2627,3246,3253,3268,3536,3846,
-  3961,4183,4667,6585,6647,7273,9061,9383,10428,10929,11938,12033,12331,12562,13793,
-  14157,14635,15265,15618,16553,16604,18362,18956,20075,21675,22520,26130,26161,
-  26435,28279,29464,31650,32302,32470,36865,42863,47425,49870,50254,50258,50360,
-  50361,50362
-  },
-  s_forbidden_tokens_ops
-);
 
 
 static void apply_timestamp_rules(at::Tensor& logits,
@@ -23,25 +12,25 @@ static void apply_timestamp_rules(at::Tensor& logits,
 {
   using namespace at::indexing;
   // Suppress <|notimestamps|> because we always want timestamps.
-  logits.index_put_({Slice(NULL), tokenizer_.no_timestamps}, -INFINITY);
+  logits.index_put_({Slice(NULL), tokenizer_.m_special_tokens.no_timestamps}, -INFINITY);
   // timestamps have to appear in pairs, except directly before EOT; mask logits accordingly
   for (int k = 0; k < tokens.size(0); ++k) {
     // Select all the predicted tokens.
-    auto seq = tokens[k].index({Slice(tokenizer_.sample_begin, NULL)});
+    auto seq = tokens[k].index({Slice(tokenizer_.m_prompt_length, NULL)});
     bool last_was_timestamp = false;
     // check if the seq has atleast two preds and if the last pred is a timestamp.
-    if (seq.size(0) >= 1 && seq[-1].item().toInt() >= tokenizer_.timestamp_begin)
+    if (seq.size(0) >= 1 && seq[-1].item().toInt() >= tokenizer_.m_special_tokens.timestamp_begin)
       last_was_timestamp = true;
     bool penultimate_was_timestamp = false;
     // check if the second last item was a timestamp.
-    if (seq.size(0) < 2 || seq[-2].item().toInt() >= tokenizer_.timestamp_begin)
+    if (seq.size(0) < 2 || seq[-2].item().toInt() >= tokenizer_.m_special_tokens.timestamp_begin)
       penultimate_was_timestamp = true;
     if (last_was_timestamp) {
       // Timestamps have appeared in pairs, suppress all timestamps for next pred cycle.
       if (penultimate_was_timestamp)
-        logits[k].index_put_({Slice(tokenizer_.timestamp_begin, NULL)}, -INFINITY);
+        logits[k].index_put_({Slice(tokenizer_.m_special_tokens.timestamp_begin, NULL)}, -INFINITY);
       else
-        logits[k].index_put_({Slice(NULL, tokenizer_.eot)}, -INFINITY);
+        logits[k].index_put_({Slice(NULL, tokenizer_.m_special_tokens.eot)}, -INFINITY);
     }
   }
 
@@ -49,18 +38,18 @@ static void apply_timestamp_rules(at::Tensor& logits,
   // Initial timestamp cannot be later than this.
   double max_initial_timestamp = 1.0;
   int max_initial_timesamp_index = round(max_initial_timestamp / precision);
-  if (tokens.size(1) == tokenizer_.sample_begin) {
-    int last_allowed = tokenizer_.timestamp_begin + max_initial_timesamp_index;
+  if (tokens.size(1) == tokenizer_.m_prompt_length) {
+    int last_allowed = tokenizer_.m_special_tokens.timestamp_begin + max_initial_timesamp_index;
     logits.index_put_({Slice(NULL), Slice(last_allowed + 1, NULL)}, -INFINITY);
   }
 
   // if sum of probability over timestamps is above any other token, sample timestamp
   at::Tensor logprobs = at::log_softmax(logits.to(at::kFloat), -1);
   for (int k = 0; k < tokens.size(0); ++k) {
-    at::Tensor timestamp_logprob = logprobs[k].index({Slice(tokenizer_.timestamp_begin + 1)}).logsumexp(-1);
-    at::Tensor max_text_token_logprob = logprobs[k].index({Slice(NULL, tokenizer_.timestamp_begin + 1)}).max();
+    at::Tensor timestamp_logprob = logprobs[k].index({Slice(tokenizer_.m_special_tokens.timestamp_begin + 1)}).logsumexp(-1);
+    at::Tensor max_text_token_logprob = logprobs[k].index({Slice(NULL, tokenizer_.m_special_tokens.timestamp_begin + 1)}).max();
     if (timestamp_logprob.item().toDouble() > max_text_token_logprob.item().toDouble()) {
-      logits[k].index_put_({Slice(NULL, tokenizer_.timestamp_begin + 1)}, -INFINITY);
+      logits[k].index_put_({Slice(NULL, tokenizer_.m_special_tokens.timestamp_begin + 1)}, -INFINITY);
     }
   }
 }
@@ -69,7 +58,10 @@ static void suppress_forbidden(at::Tensor& logits,
                                       const at::Tensor& tokens,
                                       const capgen::Tokenizer& tokenizer)
 {
-  logits.index_put_({at::indexing::Slice(NULL), s_forbidden_tokens}, -INFINITY);
+  if (tokenizer.is_multilingual())
+    logits.index_put_({at::indexing::Slice(NULL), capgen::s_MULTILINGUAL_TOKENIZER_BAD_TOKENS}, -INFINITY);
+  else
+    logits.index_put_({at::indexing::Slice(NULL), capgen::s_ENGLISH_TOKENIZER_BAD_TOKENS}, -INFINITY);
   apply_timestamp_rules(logits, tokens, tokenizer);
 }
 
@@ -82,7 +74,7 @@ int detect_language(const at::Tensor &spectrogram,
   at::Tensor audio_segment = spectrogram.index_select(-1, at::arange(0, 3000));
   at::Tensor audio_features = model->embed_audio(audio_segment);
   const at::TensorOptions tensor_opts = at::TensorOptions(at::kLong);
-  at::Tensor tokens = at::tensor({tokenizer.sot}, tensor_opts);
+  at::Tensor tokens = at::tensor({tokenizer.m_special_tokens.sot}, tensor_opts);
   tokens = tokens.unsqueeze(0);
   at::Tensor logits = model->logits(tokens, audio_features, 0);
   logits = logits.index({at::indexing::Slice(NULL), 0});
@@ -109,19 +101,19 @@ SegmentTranscription::SegmentTranscription(std::array<int, 256>& tokens,
 {
   segment_index = _segment_index;
   if (tokenizer.is_timestamp(tokens[n_tokens - 1]))
-    end_time = tokenizer.time_from_token(tokens[n_tokens - 1]);
+    end_time = tokenizer.decode_timestamp_token(tokens[n_tokens - 1]);
   else {
     end_time = 30.0f;
-    tokens[n_tokens] = tokenizer.timestamp_end;
+    tokens[n_tokens] = tokenizer.m_special_tokens.timestamp_end;
     n_tokens += 1;
   }
   TimestampedTranscription sub_seg_tr;
   for (int i = 0; i < n_tokens; ++i) {
     if (tokenizer.is_timestamp(tokens[i])) {
       if (sub_seg_tr.text_tokens.size() == 0)
-        sub_seg_tr.start_time = tokenizer.time_from_token(tokens[i]);
+        sub_seg_tr.start_time = tokenizer.decode_timestamp_token(tokens[i]);
       else {
-        sub_seg_tr.end_time = tokenizer.time_from_token(tokens[i]);
+        sub_seg_tr.end_time = tokenizer.decode_timestamp_token(tokens[i]);
         sub_segments.push_back(std::move(sub_seg_tr));
         sub_seg_tr = TimestampedTranscription();
       }
@@ -132,7 +124,7 @@ SegmentTranscription::SegmentTranscription(std::array<int, 256>& tokens,
 
 
 void greedy_decode_segment(const at::Tensor& spectrogram,
-                           const int task,
+                           capgen::TranscriptionTask task,
                            const int language_id,
                            const int segment_index,
                            std::shared_ptr<Whisper> model,
@@ -141,7 +133,13 @@ void greedy_decode_segment(const at::Tensor& spectrogram,
 {
   const at::Tensor audio_features = model->embed_audio(spectrogram);
   const auto tensor_opts = at::TensorOptions(at::kLong);
-  at::Tensor tokens = at::tensor({tokenizer.sot, language_id, task}, tensor_opts);
+  at::Tensor tokens;
+  if (tokenizer.is_multilingual()) {
+    int task = (task == capgen::TranscriptionTask::Transcribe) ? tokenizer.m_special_tokens.transcribe : tokenizer.m_special_tokens.translate;
+    tokens = at::tensor({tokenizer.m_special_tokens.sot, language_id, task}, tensor_opts);
+  }
+  else
+    tokens = at::tensor({tokenizer.m_special_tokens.sot}, tensor_opts);
   tokens = tokens.unsqueeze(0);
   std::array<int, 256> pred_tokens;
   unsigned int n_pred_tokens = 0;
@@ -152,7 +150,7 @@ void greedy_decode_segment(const at::Tensor& spectrogram,
     // const at::Tensor probs = at::softmax(logits, -1);
     const at::Tensor pred_token = logits.argmax(-1);
     const int pred_token_int = pred_token.item().toInt();
-    if (pred_token_int == tokenizer.eot)
+    if (pred_token_int == tokenizer.m_special_tokens.eot)
       break;
     pred_tokens[i] = pred_token_int;
     n_pred_tokens += 1;
@@ -185,7 +183,7 @@ void save_to_srt(const std::vector<SegmentTranscription>& transcription,
   std::FILE *outfile = std::fopen(filename.c_str(), "w");
   // TODO: Put in current dir.
   if (!outfile) {
-    std::cerr << "[ERROR]: Failed to open output file: " << filename  << std::endl;
+    CG_LOG_ERROR("Failed to create captions srt file at %s", filename.c_str());
     throw std::exception();
   }
   float time_offset = 0.0f;
@@ -197,7 +195,7 @@ void save_to_srt(const std::vector<SegmentTranscription>& transcription,
       write_time(time_offset + timestamped_transcription.start_time, outfile, true);
       write_time(time_offset + timestamped_transcription.end_time, outfile, false);
       for (auto &token : timestamped_transcription.text_tokens)
-        std::fprintf(outfile, tokenizer.decode_token(token));
+        std::fprintf(outfile, "%s", tokenizer.decode_token(token));
       std::fprintf(outfile, "\n\n");
     }
     time_offset += segment_transcription.end_time;

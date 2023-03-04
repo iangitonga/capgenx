@@ -5,6 +5,7 @@
 #include <vector>
 #include "model.h"
 #include "tokenizer.h"
+#include "transcribe.h"
 
  
 namespace capgen {
@@ -43,8 +44,8 @@ public:
 
 
 void greedy_decode_segment(const at::Tensor& spectrogram,
-                           const int task,
-                           const int language_id,
+                           TranscriptionTask task,  // TranscriptionTask
+                           const int language_id,   // TranscriptionTask
                            const int segment_index,
                            std::shared_ptr<Whisper>,
                            const Tokenizer& tokenizer,

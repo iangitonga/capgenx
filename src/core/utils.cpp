@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include "utils.h"
+#include "log.h"
 
 
 namespace capgen {
@@ -23,11 +24,12 @@ void TranscribingTimer::stop(int64_t num_segments) const {
   auto duration = end - start;
   auto duration_per_segment = duration / num_segments;
   int64_t duration_min = duration / 60;
-  std::cout << "[TIMING]\n---------------------------" << std::endl;
-  std::cout << "Audio length      : " << (int)(num_segments * 0.5) << " mins" << std::endl;
-  std::cout << "Number of segments: " << num_segments << std::endl;
-  std::cout << "Total time elapsed: " << duration_min << " mins" << std::endl;
-  std::cout << "Avg time/segment  : " << duration_per_segment << " secs" << std::endl;
-  std::cout << "---------------------------\n" << std::endl;
+  CG_LOG_MDEBUG("TIMING INFO");
+  CG_LOG_MDEBUG("---------------------------");
+  CG_LOG_DEBUG("Number of segments: %d", num_segments);
+  CG_LOG_DEBUG("Audio Length      : %d mins", (int)(num_segments * 0.5));
+  CG_LOG_DEBUG("Total time elapsed: %d mins", duration_min);
+  CG_LOG_DEBUG("Avg time/segment  : %d secs", duration_per_segment);
+  CG_LOG_MDEBUG("---------------------------");
 }
 }
