@@ -56,6 +56,7 @@ target_link_libraries(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/bu
 target_link_libraries(${PROJECT_NAME} m)
 target_link_libraries(${PROJECT_NAME} lzma)
 target_link_libraries(${PROJECT_NAME} z)
+target_link_libraries(${PROJECT_NAME} bz2)
 
 # Torch library
 target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES})

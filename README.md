@@ -41,7 +41,7 @@ git clone --recurse-submodules https://github.com/iangitonga/capgenx.git
 cd capgenx/
 python3 configure.py
 mkdir build
-cmake -S . -B build/
+cmake -S . -B build/ -DCMAKE_BUILD_TYPE=Release
 cd build/
 make
 ```
