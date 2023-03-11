@@ -9,7 +9,7 @@ list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/third_party/libtorch/")
 find_package(Torch REQUIRED)
 
 
-# Wxwidgets library
+# Wxwidgets library. Linked statically.
 set(wxBUILD_SHARED OFF)
 set(wxUSE_AUI 0)
 set(wxUSE_PROPGRID 0)
@@ -36,13 +36,26 @@ file(GLOB_RECURSE SRC_FILES src/*.c src/*.cpp)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin/")
 
-
 add_executable(Capgen ${SRC_FILES})
+#set_target_properties(Capgen PROPERTIES BUILD_WITH_INSTALL_PATH FALSE LINK_FLAGS "Wl,-rpath,$ORIGIN/")
+
+#set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
+
+#set(CMAKE_SKIP_BUILD_RPATH FALSE)
+#set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+#set(CMAKE_BUILD_RPATH ".")
+#set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
+
+#set(BUILD_RPATH "/home/iangitonga/dev/") set(CMAKE_INSTALL_RPATH $ORIGIN $ORIGIN/../lib)
+#set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
+
+#set(CMAKE_INSTALL_RPATH "/home/iangitonga/dev/")
+#set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 
 # Capgen include
 target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_SOURCE_DIR}/src/")
 
-# FFmpeg library.
+# FFmpeg library. Linked statically.
 target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/include")
 target_link_libraries(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libavformat.a")
 target_link_libraries(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libavcodec.a")
@@ -52,13 +65,13 @@ target_link_libraries(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/bu
 target_link_libraries(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libswresample.a")
 target_link_libraries(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libavdevice.a")
 
-# Math and compression libraries required by FFmpeg.
+# Math and compression libraries required by FFmpeg. Linked dynamically.
 target_link_libraries(${PROJECT_NAME} m)
 target_link_libraries(${PROJECT_NAME} lzma)
 target_link_libraries(${PROJECT_NAME} z)
 target_link_libraries(${PROJECT_NAME} bz2)
 
-# Torch library
+# Torch library. Linked dynamically.
 target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES})
 
 # Wxwidgets
@@ -66,3 +79,12 @@ target_link_libraries(${PROJECT_NAME} wx::net wx::core wx::base)
 
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
+
+# Search path for shared libraries that we distribute alongside the application.
+# We use a relative path because we do not include an installer that can copy the
+# required shared objects to default search dirs such as /usr/lib/ on linux.
+# It is also important that we append instead of setting directly to avoid
+# overriding the rpath set by Cmake. We want the application to use the libraries
+# in third_party/ directory during development but use the origin relative path
+# when distributed.
+set_property(TARGET Capgen APPEND PROPERTY BUILD_RPATH "$ORIGIN/assets/lib/")

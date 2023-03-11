@@ -21,10 +21,11 @@
 namespace capgen {
 
 template<typename ... Args>
-void log(const char *type, const char *color, const char *s, Args ... args) {
-  std::printf("%s[%s]: ", color, type);
-  std::printf(s, args...);
-  std::printf("%s\n", CG_LOG_RESET_COLOR);
+void log(const char *type, const char *color, const char *s, Args ... args)
+{
+    std::printf("%s[%s]: ", color, type);
+    std::printf(s, args...);
+    std::printf("%s\n", CG_LOG_RESET_COLOR);
 }
 
 }

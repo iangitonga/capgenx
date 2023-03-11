@@ -4,12 +4,17 @@ OpenAI. It has a minimal UI that makes it easier for absolutely anyone can use t
 of audio and videos such as podcasts, movies, documentaries, etc. Capgen is also
 available as a Python command line application [here](https://github.com/iangitonga/capgen).
 
+## Features
+- Source language transcription of audio and video.
+- Source language to English translation.
+- Tiny, base and small models available.
+
 ## Limitations
 As of now, Capgen is in development and lacks many important features but
 that will change as new features get integrated. Some of the limitations are:
 
 - No GPU support. Libtorch GPU library integration has not been tested.
-- Only greedy decoding is available.
+- Only tested on Linux. Windows and Mac will be supported in the future.
 
 ## Architecture
 Capgen is written entirely in C++ and C. It depends on the following libraries:

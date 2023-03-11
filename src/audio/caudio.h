@@ -11,20 +11,22 @@ extern "C" {
 /// @brief This structure holds decoding output results. This struct is created by a call
 /// to `alloc_audio_decode_output` function and freed by `free_audio_decode_output`.
 typedef struct AudioDecodeOutput {
-  // Pointer to the output buffer that must be freed by the caller. Also, although
-  // it is a `uint8_t *` it should be interpreted as containing unsigned 16-bit data. uint8_t
-  // is used because it allows for nice pointer arithmetic in-terms of bytes which is useful
-  // for memory allocation, reallocation and copying.
-  uint8_t *buf;
-  // Buffer size, in bytes.
-  uint64_t tot_buf_size;
-  // Buffer size that is currently used, in bytes. This is used during decoding process and
-  // when decoding process is done the buffer is properly resized so that the total buf
-  // size is equal to used buf size.
-  uint64_t used_buf_size;
+    // Pointer to the output buffer that must be freed by the caller. Also, although
+    // it is a `uint8_t *` it should be interpreted as containing unsigned 16-bit data. uint8_t
+    // is used because it allows for nice pointer arithmetic in-terms of bytes which is useful
+    // for memory allocation, reallocation and copying.
+    uint8_t *buf;
+    
+    // Buffer size, in bytes.
+    uint64_t tot_buf_size;
 
-  // The number of audio samples available.
-  int64_t num_samples;
+    // Buffer size that is currently used, in bytes. This is used during decoding process and
+    // when decoding process is done the buffer is properly resized so that the total buf
+    // size is equal to used buf size.
+    uint64_t used_buf_size;
+
+    // The number of audio samples available.
+    int64_t num_samples;
 } AudioDecodeOutput;
 
 

@@ -1,11 +1,12 @@
 #pragma once
 
-#include <ATen/ATen.h>
-#include <array>
-#include <vector>
 #include "model.h"
 #include "tokenizer.h"
 #include "transcribe.h"
+
+#include <ATen/ATen.h>
+
+#include <vector>
 
  
 namespace capgen {
@@ -18,10 +19,10 @@ int detect_language(const at::Tensor &spectrogram,
 // <0.00>The quick brown fox jumped over the lazy dog<2.00>
 class TimestampedTranscription {
 public:
-  std::vector<int> text_tokens;
-  float start_time, end_time;
+    std::vector<uint32_t> m_text_tokens;
+    float m_start_time, m_end_time;
 
-  TimestampedTranscription();
+    TimestampedTranscription();
 };
 
 
@@ -32,21 +33,29 @@ public:
 // end at a lower timestamp.
 class SegmentTranscription {
 public:
-  std::vector<TimestampedTranscription> sub_segments;
-  int segment_index;
-  float end_time;
+    std::vector<TimestampedTranscription> sub_segments;
+    uint32_t m_segment_index;
+    float m_end_time;
 
-  SegmentTranscription(std::array<int, 256>& _tokens,
-                       unsigned int _n_tokens,
-                       int _segment_index,
+    SegmentTranscription(std::vector<uint32_t>& tokens,
+                       uint32_t segment_index,
                        const Tokenizer& tokenizer);
 };
 
 
 void greedy_decode_segment(const at::Tensor& spectrogram,
-                           TranscriptionTask task,  // TranscriptionTask
-                           const int language_id,   // TranscriptionTask
-                           const int segment_index,
+                           TranscriptionTask task,
+                           const uint32_t language_id,
+                           const uint32_t segment_index,
+                           std::shared_ptr<Whisper>,
+                           const Tokenizer& tokenizer,
+                           std::vector<SegmentTranscription>& out_transcriptions);
+
+
+void beamsearch_decode_segment(const at::Tensor& spectrogram,
+                           TranscriptionTask task,
+                           const uint32_t language_id,
+                           const uint32_t segment_index,
                            std::shared_ptr<Whisper>,
                            const Tokenizer& tokenizer,
                            std::vector<SegmentTranscription>& out_transcriptions);

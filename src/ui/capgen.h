@@ -1,115 +1,139 @@
 #pragma once
 
-// Included in the top so that it includes libTorch first.
 #include "core/transcribe.h"
 #include "utils.h"
-// #include <wx/wxprec.h>
 
+#include <wx/wxprec.h>
 // For the platforms without support for precompiled headers.
 #ifndef WX_PRECOMP
   #include <wx/wx.h>
 #endif
 
+#include <filesystem>
 #include <memory>
 #include <vector>
-#include <filesystem>
 
 
 namespace capgen {
 
 class Application : public wxApp {
 public:
-  virtual bool OnInit();
+    ModelsManager models_manager = ModelsManager();
 
-  ModelsManager models_manager = ModelsManager();
+    virtual bool OnInit();
 };
 
 
 // IDs for app widgets.
-enum {
-  ID_audio_add = 1,
-  ID_video_add,
-  ID_transcribe_btn,
-  ID_timer,
-  ID_model_selector,
-  ID_model_dl_btn,
-  ID_model_dl_close_btn
+enum 
+{
+    ID_audio_add = 1,
+    ID_video_add,
+    ID_about_btn,
+    ID_transcribe_btn,
+    ID_timer,
+    ID_model_selector,
+    ID_model_dl_btn,
+    ID_model_dl_close_btn
 };
 
 
 class MainWindow : public wxFrame {
 public:
-  wxScrolledWindow *m_content_window;
-  wxSizer *m_content_sizer = nullptr;
+    MainWindow();
+    void add_trx_widget(std::filesystem::path media_filepath);
+    Application &app() { return m_app; }
+    std::string get_selected_task() const { return m_task_choices->GetStringSelection().ToStdString(); }
+    std::string get_selected_model() const { return m_model_choices->GetStringSelection().ToStdString(); }
 
-  MainWindow();
-  void add_trx_widget(wxString &path);
+    void enable_trx_buttons() const 
+    {
+        m_audio_btn->Enable();
+        m_video_btn->Enable();
+    }
+
+    void disable_trx_buttons() const
+    {
+        m_audio_btn->Disable();
+        m_video_btn->Disable();
+    }
 
 private:
-  void on_about(wxCommandEvent &evt);
-  void on_audio_add(wxCommandEvent &evt);
-  void on_exit(wxCommandEvent &evt);
-  void on_video_add(wxCommandEvent &evt);
+    Application& m_app;
+    wxPanel *m_main_panel;
+    wxPanel *m_toolbar;
+    wxButton *m_audio_btn;
+    wxButton *m_video_btn;
+    wxChoice *m_model_choices;
+    wxChoice *m_task_choices;
+    wxScrolledWindow *m_content_window;
+    wxSizer *m_content_sizer;
+
+    void on_toolbar_btn_hover(wxMouseEvent &evt);
+    void on_toolbar_btn_leave(wxMouseEvent &evt);
+    void on_audio_add(wxCommandEvent &evt);
+    void on_video_add(wxCommandEvent &evt);
+    void on_model_choice_update(wxCommandEvent &evt);
+    void on_about(wxCommandEvent &evt);
 };
 
 
 class TranscriptionUpdateEvent : public wxThreadEvent {
 public:
-  TranscriptionUpdateEvent(wxEventType eventType, int id, int progress)
-    : wxThreadEvent(eventType, id), m_progress(progress)
-  {}
+    TranscriptionUpdateEvent(wxEventType eventType, int id, int progress)
+        : wxThreadEvent(eventType, id), m_progress(progress)
+        {}
 
-  int get_progress() const { return m_progress; }
+    int get_progress() const { return m_progress; }
 
-  virtual wxEvent *Clone() const { return new TranscriptionUpdateEvent(*this); }
+    virtual wxEvent *Clone() const { return new TranscriptionUpdateEvent(*this); }
 
-private:
-  int m_progress;
+    private:
+        int m_progress;
 };
 
 
 class TranscriptionWidget : public wxPanel {
 public:
-  Application& m_app;
-  MainWindow *m_main_window;
-  wxStaticText *m_progbar_text;
-  wxStaticText *m_out_fpath_text;
-  wxGauge *m_progbar;
-  wxStaticText *m_status_text;
-  wxChoice *m_model_choices;
-  wxChoice *m_task_choices;
-  wxButton *m_transcribe_btn;
-  std::string m_audio_filepath;
-  // Timer allows us to display indeterminate progress bar when loading the model. 
-  wxTimer m_timer;
+    TranscriptionWidget(MainWindow *main_window, wxScrolledWindow *parent_window, std::filesystem::path media_filepath);
+    MainWindow *get_main_window() const { return m_main_window; }
 
-  TranscriptionWidget(MainWindow *main_window, wxScrolledWindow *parent_window, const wxString &path);
-  void on_model_choice_update(wxCommandEvent &evt);
-  void on_timer_update(wxTimerEvent &evt);
-  void on_trx_btn_click(wxCommandEvent &evt);
-  void on_trx_model_load(wxThreadEvent &evt);
-  void on_trx_thread_completion(wxThreadEvent& evt);
-  void on_trx_thread_start(wxThreadEvent& evt);
-  void on_trx_thread_update(TranscriptionUpdateEvent& evt);
-  void on_trx_thread_fail(wxThreadEvent &evt);
+private:
+    MainWindow *m_main_window;
+    wxStaticText *m_progbar_text;
+    wxStaticText *m_out_fpath_text;
+    wxGauge *m_progbar;
+    wxStaticText *m_status_text;
+    wxButton *m_transcribe_btn;
+    std::filesystem::path m_media_filepath;
+    // Timer allows us to display indeterminate progress bar when loading the model. 
+    wxTimer m_timer;
+
+    void on_timer_update(wxTimerEvent &evt);
+    void on_trx_btn_click(wxCommandEvent &evt);
+    void on_trx_model_load(wxThreadEvent &evt);
+    void on_trx_thread_completion(wxThreadEvent& evt);
+    void on_trx_thread_start(wxThreadEvent& evt);
+    void on_trx_thread_update(TranscriptionUpdateEvent& evt);
+    void on_trx_thread_fail(wxThreadEvent &evt);
 };
 
 
 class TranscriptionThread : public wxThread {
 public:
-  std::string m_audio_path;
-  std::string m_model_name;
-  ModelType m_model_type;
-  TranscriptionWidget *m_widget;
-  TranscriptionTask m_trx_task;
+    std::filesystem::path m_media_filepath;
+    std::string m_model_name;
+    ModelType m_model_type;
+    TranscriptionWidget *m_widget;
+    TranscriptionTask m_trx_task;
 
-  TranscriptionThread(std::string &path,
-                      std::string &model_name,
-                      ModelType model_type,
-                      TranscriptionWidget *widget,
-                      TranscriptionTask task);
-  ~TranscriptionThread();
-  virtual void *Entry();
+    TranscriptionThread(std::filesystem::path m_media_filepath,
+                        std::string &model_name,
+                        ModelType model_type,
+                        TranscriptionWidget *widget,
+                        TranscriptionTask task);
+    ~TranscriptionThread();
+    virtual void *Entry();
 };
 
 // Transcription thread events.
@@ -122,20 +146,19 @@ wxDEFINE_EVENT(EVT_TRX_THREAD_FAILED, wxThreadEvent);
 // Model download wizard
 class ModelDownloadDialog : public wxDialog {
 public:
-  wxStaticText *m_dl_status;
-  wxButton *m_dl_btn;
-  wxGauge *m_dl_gauge;
-  wxBoxSizer *m_sizer;
-  std::string m_model_name;
-  ModelInfo m_model_info;
-
-  ModelDownloadDialog(wxWindow *parent, const std::string &model_name);
+    ModelDownloadDialog(wxWindow *parent, const std::string &model_name);
 
 private:
-  void on_dl_btn_click(wxCommandEvent &evt);
-  void on_dl_btn_close_click(wxCommandEvent &evt);
-  void download_model();
+    wxStaticText *m_dl_status;
+    wxButton *m_dl_btn;
+    wxGauge *m_dl_gauge;
+    wxBoxSizer *m_sizer;
+    std::string m_model_name;
+    ModelInfo m_model_info;
+
+    void on_dl_btn_click(wxCommandEvent &evt);
+    void on_dl_btn_close_click(wxCommandEvent &evt);
+    void download_model();
 };
 
 } // namespace capen
-
