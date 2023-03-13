@@ -212,7 +212,7 @@ void beamsearch_decode_segment(const at::Tensor &spectrogram,
                                std::vector<SegmentTranscription> &out_transcriptions)
 {
     // BEAMSEARCH.
-    const uint32_t n_beam = 3;
+    const uint32_t n_beam = 4;
     // Embed audio and copy the embeddings `n_beam` times in the zeroth dimension.
     at::Tensor audio_features = model->embed_audio(spectrogram);
     audio_features = audio_features.repeat_interleave(n_beam, 0);

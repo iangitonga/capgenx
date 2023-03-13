@@ -1,8 +1,14 @@
 # Capgen
+![alt text](./demo_image.png)
+
 Capgen is an application that transcribes audio and video using [Whisper](https://openai.com/blog/whisper/) neural network created by
 OpenAI. It has a minimal UI that makes it easier for absolutely anyone can use to transcribe or translate all sorts
 of audio and videos such as podcasts, movies, documentaries, etc. Capgen is also
 available as a Python command line application [here](https://github.com/iangitonga/capgen).
+
+## Download
+For Linux users, you can download the application [HERE](https://huggingface.co/iangitonga/capgen_models/resolve/main/Capgen.zip).
+After downloading, unzip the archive and run the application executable.
 
 ## Features
 - Source language transcription of audio and video.

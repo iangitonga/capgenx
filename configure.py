@@ -6,12 +6,12 @@ BASE_PATH = os.path.abspath(os.getcwd())
 
 
 # Libtorch download binaries.
-LIBTORCH_CPU_DOWNLOAD_URL = "https://download.pytorch.org/libtorch/nightly/cpu/libtorch-shared-with-deps-latest.zip"
+LIBTORCH_CPU_DOWNLOAD_URL = "unzip libtorch-cxx11-abi-shared-with-deps-1.13.1+cpu.zip"
 LIBTORCH_DOWNLOAD_PATH = os.path.join(BASE_PATH, "third_party")
 os.chdir(LIBTORCH_DOWNLOAD_PATH)
 
 subprocess.run([f"wget {LIBTORCH_CPU_DOWNLOAD_URL}"], shell=True, check=True)
-subprocess.run([f"unzip libtorch-shared-with-deps-latest.zip"], shell=True, check=True)
+subprocess.run([f"unzip libtorch-cxx11-abi-shared-with-deps-1.13.1+cpu.zip"], shell=True, check=True)
 
 
 # FFmpeg Build.

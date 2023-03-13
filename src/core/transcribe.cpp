@@ -76,13 +76,14 @@ void capgen::transcribe(std::filesystem::path media_filepath,
     // seek is the position of the frame of the segment we should transcribe next.
     uint32_t seek = 0;
     const float max_percentage = 99.0f;
-
     const capgen::TranscribingTimer timer;
+
     while (seek < spectrogram.size(-1))
     {
         at::Tensor segment_spec = pad_or_trim(spectrogram, seek);
 
         capgen::beamsearch_decode_segment(segment_spec, task, language_id, segment_idx, whisper, tokenizer, transcriptions);
+        // capgen::greedy_decode_segment(segment_spec, task, language_id, segment_idx, whisper, tokenizer, transcriptions);
         frames_transcribed += transcriptions[segment_idx].m_end_time * 100;
         seek += (int)(transcriptions[segment_idx].m_end_time * 100);
         segment_idx += 1;
@@ -93,6 +94,7 @@ void capgen::transcribe(std::filesystem::path media_filepath,
             update_callback(prog_percentage);
         CG_LOG_DEBUG("Transcription progress: (%d%)", (int)prog_percentage);
     }
+
     std::filesystem::path outfilepath = media_filepath.replace_extension("srt");
     capgen::save_to_srt(transcriptions, tokenizer, outfilepath.string());
     update_callback(100.0f);

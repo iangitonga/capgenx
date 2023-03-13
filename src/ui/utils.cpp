@@ -44,6 +44,15 @@ std::string capgen::ModelsManager::get_default_model_name() const
     return m_registered_models.front();
 }
 
+const capgen::ModelInfo& capgen::ModelsManager::get_model_info(const std::string& model_name) const
+{
+    if (model_name == "tiny")
+        return m_tiny_model_info;
+    else if (model_name == "small")
+        return m_small_model_info;
+    return m_base_model_info;
+}
+
 bool capgen::ModelsManager::model_is_registered(const std::string& name) const
 {
     for (const auto &model_name : m_registered_models)
@@ -54,9 +63,9 @@ bool capgen::ModelsManager::model_is_registered(const std::string& name) const
 
 void capgen::ModelsManager::register_downloaded_models()
 {
-    const std::string default_model_archive = "./assets/models/tiny.zip";
     for (const auto &entry : std::filesystem::directory_iterator(m_models_basepath))
-        if (entry.is_directory()) {
+        if (entry.is_directory())
+        {
             const std::string model_dir = entry.path().string();
             m_registered_models.push_back(std::string(model_dir.begin() + m_models_basepath.length(), model_dir.end()));
         }
@@ -65,12 +74,12 @@ void capgen::ModelsManager::register_downloaded_models()
 void capgen::ModelsManager::reload_registered_models()
 {
     for (const auto &entry : std::filesystem::directory_iterator(m_models_basepath))
-    if (entry.is_directory()) 
-    {
-        const std::string model_dir = entry.path().string();
-        if (!model_is_registered(model_dir))
-            m_registered_models.push_back(std::string(model_dir.begin() + m_models_basepath.length(), model_dir.end()));
-    }
+        if (entry.is_directory()) 
+        {
+            const std::string model_dir = entry.path().string();
+            if (!model_is_registered(model_dir))
+                m_registered_models.push_back(std::string(model_dir.begin() + m_models_basepath.length(), model_dir.end()));
+        }
 }
 
 int capgen::b_to_mb(int bytes)

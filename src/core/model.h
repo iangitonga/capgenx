@@ -2,7 +2,6 @@
 
 #include <torch/script.h>
 
-#include <map>
 #include <string>
 
 namespace capgen {
@@ -33,19 +32,6 @@ private:
 
     torch::jit::script::Module m_encoder;
     torch::jit::script::Module m_decoder;
-};
-
-struct ModelInfo {
-    const char *name;
-    uint32_t dl_size_mb; // download size (compressed).
-    uint32_t mem_usage_mb;
-    const char* url;
-};
-
-static std::map<std::string, ModelInfo> MODELS = {
-    {"tiny",  {"tiny",   178,   500, "https://huggingface.co/iangitonga/capgen_models/resolve/main/tiny.zip"}},
-    {"base",  {"base",   338,   800, "https://huggingface.co/iangitonga/capgen_models/resolve/main/base.zip"}},
-    {"small", {"small", 1140,  1000, "https://huggingface.co/iangitonga/capgen_models/resolve/main/small.zip"}}
 };
 
 } // namespace capgen

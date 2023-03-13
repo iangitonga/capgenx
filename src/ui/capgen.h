@@ -146,7 +146,7 @@ wxDEFINE_EVENT(EVT_TRX_THREAD_FAILED, wxThreadEvent);
 // Model download wizard
 class ModelDownloadDialog : public wxDialog {
 public:
-    ModelDownloadDialog(wxWindow *parent, const std::string &model_name);
+    ModelDownloadDialog(wxWindow *parent, const ModelInfo &model_info);
 
 private:
     wxStaticText *m_dl_status;

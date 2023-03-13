@@ -37,20 +37,7 @@ file(GLOB_RECURSE SRC_FILES src/*.c src/*.cpp)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin/")
 
 add_executable(Capgen ${SRC_FILES})
-#set_target_properties(Capgen PROPERTIES BUILD_WITH_INSTALL_PATH FALSE LINK_FLAGS "Wl,-rpath,$ORIGIN/")
-
-#set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
-
-#set(CMAKE_SKIP_BUILD_RPATH FALSE)
-#set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
-#set(CMAKE_BUILD_RPATH ".")
-#set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
-
-#set(BUILD_RPATH "/home/iangitonga/dev/") set(CMAKE_INSTALL_RPATH $ORIGIN $ORIGIN/../lib)
-#set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
-
-#set(CMAKE_INSTALL_RPATH "/home/iangitonga/dev/")
-#set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
 
 # Capgen include
 target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_SOURCE_DIR}/src/")
@@ -77,8 +64,6 @@ target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES})
 # Wxwidgets
 target_link_libraries(${PROJECT_NAME} wx::net wx::core wx::base)
 
-
-set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
 
 # Search path for shared libraries that we distribute alongside the application.
 # We use a relative path because we do not include an installer that can copy the

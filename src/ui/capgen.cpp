@@ -14,6 +14,7 @@
 // A c++ file containing raw png data for toolbar icons. It is meant to be included like this
 // and is therefore not compiled separately.
 #include "toolbar_icons"
+#include "logo.xpm"
 
 // Registers our application's entry point.
 wxIMPLEMENT_APP(capgen::Application);
@@ -50,6 +51,8 @@ capgen::MainWindow::MainWindow()
   : wxFrame(NULL, wxID_ANY, "Capgen", wxDefaultPosition, wxSize(600, 800)),
     m_app(wxGetApp()), m_content_sizer(new wxBoxSizer(wxVERTICAL))
 {
+    SetIcon(wxICON(s_CAPGEN_LOGO));
+
     this->SetMinSize(this->GetSize());
     this->SetMaxSize(this->GetSize());
 
@@ -109,13 +112,13 @@ capgen::MainWindow::MainWindow()
     opts_panel->SetBackgroundColour(wxColour(45, 45, 45));
 
     // Task selector
-    m_task_choices = new wxChoice(opts_panel, wxID_ANY, wxDefaultPosition, wxSize(170, 28));
+    m_task_choices = new wxChoice(opts_panel, wxID_ANY, wxDefaultPosition, wxSize(180, 28));
     m_task_choices->Append("English");
     m_task_choices->Append("Detected language");
     m_task_choices->Append("Translate to English");
     m_task_choices->Select(0);
     wxBoxSizer *task_sizer = new wxBoxSizer(wxVERTICAL);
-    wxStaticText *captions_text = new wxStaticText(opts_panel, wxID_ANY, "CAPTIONS LANGUAGE");
+    wxStaticText *captions_text = new wxStaticText(opts_panel, wxID_ANY, "TRANSCRIPTION LANGUAGE");
     captions_text->SetForegroundColour(toolbar_fg);
     task_sizer->Add(captions_text, wxSizerFlags().Align(wxALIGN_CENTER_HORIZONTAL));
     task_sizer->AddSpacer(6);
@@ -141,8 +144,8 @@ capgen::MainWindow::MainWindow()
     model_sizer->AddSpacer(6);
     model_sizer->Add(m_model_choices);
 
-    opts_panel_sizer->Add(task_sizer, 0, wxGROW | wxLEFT | wxTOP, 15);
-    opts_panel_sizer->Add(model_sizer, 0, wxGROW | wxLEFT | wxTOP, 15);
+    opts_panel_sizer->Add(task_sizer, 0, wxGROW | wxLEFT | wxTOP, 10);
+    opts_panel_sizer->Add(model_sizer, 0, wxGROW | wxLEFT | wxTOP, 10);
 
 
     // TRANSCRIPTION WIDGETS CONTAINER.
@@ -153,7 +156,7 @@ capgen::MainWindow::MainWindow()
     m_content_window->SetScrollbars(0, 20, 0, 100);
 
     main_sizer->Add(m_toolbar, 0, wxALL | wxGROW);
-    main_sizer->Add(opts_panel, 0, wxBOTTOM | wxGROW, 2);
+    main_sizer->Add(opts_panel, 0, wxBOTTOM | wxGROW, 10);
     main_sizer->Add(m_content_window, 0, wxALL | wxGROW);
 
     Centre();
@@ -186,7 +189,8 @@ void capgen::MainWindow::on_model_choice_update(wxCommandEvent &event)
     int selected_idx = m_model_choices->GetSelection();
     if (!(m_app.models_manager.model_is_registered(selected)))
     {
-        ModelDownloadDialog download_dlg(this, selected);
+        capgen::ModelInfo target_model_info = m_app.models_manager.get_model_info(selected);
+        ModelDownloadDialog download_dlg(this, target_model_info);
         download_dlg.ShowModal();
         // Check if the model was downloaded and if not, revert to the default model.
         m_app.models_manager.reload_registered_models();
@@ -194,13 +198,13 @@ void capgen::MainWindow::on_model_choice_update(wxCommandEvent &event)
         {
             std::string default_model_name = m_app.models_manager.get_default_model_name();
             if (default_model_name == "tiny")
-            m_model_choices->Select(0);
+                m_model_choices->Select(0);
             else if (default_model_name == "base")
-            m_model_choices->Select(1);
+                m_model_choices->Select(1);
             else if (default_model_name == "small")
-            m_model_choices->Select(2);
+                m_model_choices->Select(2);
             else
-            m_model_choices->Select(64); // Force selection of none.
+                m_model_choices->Select(64); // Force selection of none.
         }
     }
 }
@@ -246,8 +250,8 @@ void capgen::MainWindow::on_video_add(wxCommandEvent& evt)
 void capgen::MainWindow::add_trx_widget(std::filesystem::path media_filepath)
 {
     capgen::TranscriptionWidget *widget = new capgen::TranscriptionWidget(this, m_content_window, media_filepath);
-    m_content_sizer->PrependSpacer(20);
-    m_content_sizer->Prepend(widget, 0, wxEXPAND);
+    m_content_sizer->PrependSpacer(10);
+    m_content_sizer->Prepend(widget, 0, wxGROW | wxLEFT | wxRIGHT, 20);
     // Re-render the sizer.
     m_content_sizer->Layout();
     m_content_sizer->FitInside(m_content_window);
@@ -269,47 +273,46 @@ capgen::TranscriptionWidget::TranscriptionWidget(MainWindow *main_window, wxScro
     // Truncate if the path is too long so it fits into the window.
     if (file_desc_path.length() > 50)
         file_desc_path = file_desc_path.substr(0, file_desc_path.length() + 50) + "...";
-    // wxString file_desc = wxString("Media File: ") + file_desc_path;
     wxStaticText *file_text = new wxStaticText(this, wxID_ANY, file_desc_path);
     file_text->SetForegroundColour(wxColour(255, 255, 255));
     file_text->SetFont(text_font);
     m_out_fpath_text = new wxStaticText(this, wxID_ANY, "");
     m_out_fpath_text->SetFont(text_font);
     m_out_fpath_text->SetForegroundColour(wxColour(50, 235, 25));
+
+    wxBoxSizer *status_sizer = new wxBoxSizer(wxHORIZONTAL);
     m_status_text = new wxStaticText(this, wxID_ANY, "");
     m_status_text->SetFont(text_font);
-    m_status_text->SetForegroundColour(wxColour(50, 235, 25));
 
-    // Transcription progress bar.
-    wxSizer *progbar_sizer = new wxBoxSizer(wxHORIZONTAL);
-    m_progbar_text = new wxStaticText(this, wxID_ANY, " 0%", wxDefaultPosition, wxSize(50, 20));
+    m_progbar_text = new wxStaticText(this, wxID_ANY, "", wxDefaultPosition);
     wxFont m_progbar_font = wxFont(11, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
     m_progbar_text->SetFont(m_progbar_font);
-    m_progbar_text->SetForegroundColour(wxColour(50, 235, 25));
-    m_progbar = new wxGauge(this, wxID_ANY, 100, wxDefaultPosition, wxSize(500, 20), wxGA_SMOOTH | wxGA_HORIZONTAL);
-    progbar_sizer->Add(m_progbar, 0);
-    progbar_sizer->Add(m_progbar_text, 0, wxTOP, 8);
 
+    status_sizer->Add(m_status_text, 0);
+    status_sizer->Add(m_progbar_text, 0, wxLEFT, 460);
+
+    // Transcription progress bar.
+    m_progbar = new wxGauge(this, wxID_ANY, 100, wxDefaultPosition, wxSize(500, 8), wxGA_SMOOTH | wxGA_HORIZONTAL);
     // Transcribe button.
-    m_transcribe_btn = new wxButton(this, ID_transcribe_btn, "GENERATE CAPTIONS");
+    m_transcribe_btn = new wxButton(this, ID_transcribe_btn, "TRANSCRIBE");
     wxFont transcribe_btn_font = wxFont(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
     m_transcribe_btn->SetFont(transcribe_btn_font);
 
     // Widget sizer.
     wxBoxSizer *main_sizer = new wxBoxSizer(wxVERTICAL);
-
+    const int border_size = 30;
     main_sizer->Add(top_line, 0, wxGROW);
     main_sizer->AddSpacer(9);
-    main_sizer->Add(file_text, 0, wxGROW | wxLEFT, 15);
+    main_sizer->Add(file_text, 0, wxGROW | wxLEFT, border_size);
     main_sizer->AddSpacer(4);
-    main_sizer->Add(m_status_text, 0, wxGROW | wxLEFT, 15);
+    main_sizer->Add(m_out_fpath_text, 0, wxGROW | wxLEFT, border_size);
     main_sizer->AddSpacer(6);
-    main_sizer->Add(m_out_fpath_text, 0, wxGROW | wxLEFT, 15);
-    main_sizer->AddSpacer(6);
-    main_sizer->Add(progbar_sizer, 0, wxGROW | wxLEFT, 15);
-    main_sizer->AddSpacer(6);
-    main_sizer->Add(m_transcribe_btn, 0, wxLEFT, 15);
+    main_sizer->Add(status_sizer, 0, wxGROW | wxLEFT, border_size);
+    main_sizer->AddSpacer(5);
+    main_sizer->Add(m_progbar, 0, wxLEFT, border_size);
     main_sizer->AddSpacer(10);
+    main_sizer->Add(m_transcribe_btn, 0, wxLEFT, border_size);
+    main_sizer->AddSpacer(15);
     this->SetSizerAndFit(main_sizer);
 
     Bind(wxEVT_BUTTON, &TranscriptionWidget::on_trx_btn_click, this, ID_transcribe_btn);
@@ -364,9 +367,11 @@ void capgen::TranscriptionWidget::on_trx_btn_click(wxCommandEvent &event)
     CG_LOG_INFO("Transcription thread running for media file: %s", m_media_filepath.c_str());
 }
 
-void capgen::TranscriptionWidget::on_trx_model_load(wxThreadEvent &event) {
+void capgen::TranscriptionWidget::on_trx_model_load(wxThreadEvent &event)
+{
     m_timer.Stop();
-    m_status_text->SetLabelText("Status: Transcribing ...");
+    m_status_text->SetLabelText("Transcribing...");
+    m_progbar_text->SetLabelText("0%");
     m_progbar->SetValue(0);
 }
 
@@ -374,12 +379,13 @@ void capgen::TranscriptionWidget::on_trx_model_load(wxThreadEvent &event) {
 void capgen::TranscriptionWidget::on_trx_thread_completion(wxThreadEvent &event)
 {
     m_main_window->enable_trx_buttons();
-    m_status_text->SetLabelText("Status: Transcription complete!");
+    m_status_text->SetLabelText("Transcription complete!");
+    m_transcribe_btn->Hide();
 
-    std::string out_fpath = m_media_filepath.replace_extension("srt").string();
+    std::string out_fpath = m_media_filepath.replace_extension("srt").filename().string();
     if (out_fpath.length() > 50)
-        out_fpath = out_fpath.substr(0, out_fpath.length() + 50) + " ...";
-    std::string label_text = std::string("Captions file: ") + out_fpath;
+        out_fpath = out_fpath.substr(0, out_fpath.length() + 50) + "...";
+    std::string label_text = std::string("Transcription file: ") + out_fpath;
     m_out_fpath_text->SetLabelText(label_text);
 }
 
@@ -387,7 +393,7 @@ void capgen::TranscriptionWidget::on_trx_thread_start(wxThreadEvent &event)
 {
     m_transcribe_btn->Disable();
     m_timer.Start(100);
-    m_status_text->SetLabelText("Status: Loading the model ...");
+    m_status_text->SetLabelText("Preparing to transcribe...");
     m_progbar->Pulse();
 }
 
@@ -395,16 +401,18 @@ void capgen::TranscriptionWidget::on_trx_thread_update(TranscriptionUpdateEvent 
 {
     float percentage = event.get_progress();
     m_progbar->SetValue(percentage);
-    std::string label = std::string(" ") + std::to_string((int)percentage) + std::string("%");
+    std::string label = std::string("") + std::to_string((int)percentage) + std::string("%");
     m_progbar_text->SetLabelText(label);
 }
 
 void capgen::TranscriptionWidget::on_trx_thread_fail(wxThreadEvent &event)
 {
     m_main_window->enable_trx_buttons();
+    m_transcribe_btn->Enable();
 
     m_timer.Stop();
     m_progbar->SetValue(0);
+    m_progbar_text->SetLabelText("0%");
     // TODO: Set red color.
     m_status_text->SetLabelText("Status: Transcription failed!");
     wxLogError("An unexpected error occurred during transcription process.");
@@ -421,7 +429,7 @@ capgen::TranscriptionThread::TranscriptionThread(std::filesystem::path media_fil
 
 capgen::TranscriptionThread::~TranscriptionThread() 
 {
-    CG_LOG_MINFO("Deleting Transcription thread");
+    CG_LOG_MINFO("Deleted Transcription thread");
 }
 
 // Code run by transcription thread. The transcription thread does not run any code
@@ -455,12 +463,11 @@ void *capgen::TranscriptionThread::Entry()
     return (void *)0;
 }
 
-capgen::ModelDownloadDialog::ModelDownloadDialog(wxWindow *parent, const std::string &model_name)
-   : wxDialog(parent, wxID_ANY, "Download model", wxDefaultPosition, wxSize(300, 300)), m_model_name(model_name),
-     m_model_info(capgen::MODELS.at(model_name))
+capgen::ModelDownloadDialog::ModelDownloadDialog(wxWindow *parent, const ModelInfo &model_info)
+   : wxDialog(parent, wxID_ANY, "Download model", wxDefaultPosition, wxSize(300, 300)), m_model_info(model_info)
 {
     wxFont text_font = wxFont(11, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_MEDIUM);
-    const std::string model_name_s = std::string("Model Name: ") + m_model_name;
+    const std::string model_name_s = std::string("Model Name: ") + model_info.name;
     wxStaticText *model_name_text = new wxStaticText(this, wxID_ANY, model_name_s);
     model_name_text->SetFont(text_font);
     const std::string model_dl_size_s = std::string("Download Size: ") + std::to_string(m_model_info.dl_size_mb) + "MB";
