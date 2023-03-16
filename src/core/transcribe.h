@@ -21,6 +21,7 @@ enum TranscriptionTask {
 void transcribe(std::filesystem::path media_filepath,
                 std::shared_ptr<Whisper> whisper,
                 TranscriptionTask task,
-                std::function<void(float)> update_callback);
+                std::function<void()> trx_start_callback,
+                std::function<void(float)> trx_update_callback);
 
 }; // namespace capgen

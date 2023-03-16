@@ -8,10 +8,10 @@ extern "C" {
 #include <stdint.h>
 
 
-/// @brief This structure holds decoding output results. This struct is created by a call
-/// to `alloc_audio_decode_output` function and freed by `free_audio_decode_output`.
+/// @brief This structure holds audio decoding output, i.e the audio samples and other relevant data.
+// It is created by a call  to `alloc_audio_decode_output` function and freed by `free_audio_decode_output`.
 typedef struct AudioDecodeOutput {
-    // Pointer to the output buffer that must be freed by the caller. Also, although
+    // Pointer to the buffer that holds all the audio samples. Also, although
     // it is a `uint8_t *` it should be interpreted as containing unsigned 16-bit data. uint8_t
     // is used because it allows for nice pointer arithmetic in-terms of bytes which is useful
     // for memory allocation, reallocation and copying.
@@ -48,12 +48,12 @@ void capi_free_audio_decode_output(AudioDecodeOutput **dec_out);
 /// @param infilepath Path to the media file from which to decode the audio stream.
 /// @param dec_out A tructure to hold the output data.
 /// @return 0 if the process was successful and -1 if decoding could not be done.
-int capi_get_audio_signal(const char *infilepath, AudioDecodeOutput *dec_out);
+int capi_get_audio_signal(const char *media_filepath, AudioDecodeOutput *dec_out);
 
-/// @brief Writes the signal from the given decoder output to the given filepaths
+/// @brief Writes the signal from the given decoder output to the given filepath
 /// as binary. Helpful for debugging and inspection.
 /// @return 0 if successful and -1 if something went wrong.
-int capi_dump_signal_to_file(const char *infilepath, AudioDecodeOutput *dec_out);
+int capi_dump_signal_to_file(const char *media_filepath, AudioDecodeOutput *dec_out);
 
 
 /// Allow/disallow logging info to be shown on the console.

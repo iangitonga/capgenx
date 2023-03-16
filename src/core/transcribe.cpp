@@ -37,13 +37,14 @@ static at::Tensor pad_or_trim(at::Tensor &spectrogram, int start_frame_pos)
 void capgen::transcribe(std::filesystem::path media_filepath,
                         std::shared_ptr<Whisper> whisper,
                         TranscriptionTask task,
-                        std::function<void(float)> update_callback)
+                        std::function<void()> trx_start_callback,
+                        std::function<void(float)> trx_update_callback)
 {
     CG_LOG_INFO("Transcription process started for file: %s", media_filepath.c_str());
 
     // Load audio and tokenizer.
-    const capgen::AudioDecoder audio_decoder = capgen::AudioDecoder();
-    at::Tensor spectrogram = audio_decoder.get_audio_spectrogram(media_filepath.c_str());
+    const capgen::AudioPreprocessor audio_preprocessor;
+    at::Tensor spectrogram = audio_preprocessor.get_audio_spectrogram(media_filepath.c_str());
     capgen::Tokenizer tokenizer(capgen::TokenizerType::Tk_English);
 
     // Detect language spoken in the audio.
@@ -78,12 +79,13 @@ void capgen::transcribe(std::filesystem::path media_filepath,
     const float max_percentage = 99.0f;
     const capgen::TranscribingTimer timer;
 
+    trx_start_callback();
     while (seek < spectrogram.size(-1))
     {
         at::Tensor segment_spec = pad_or_trim(spectrogram, seek);
 
-        capgen::beamsearch_decode_segment(segment_spec, task, language_id, segment_idx, whisper, tokenizer, transcriptions);
-        // capgen::greedy_decode_segment(segment_spec, task, language_id, segment_idx, whisper, tokenizer, transcriptions);
+        // capgen::beamsearch_decode_segment(segment_spec, task, language_id, segment_idx, whisper, tokenizer, transcriptions);
+        capgen::greedy_decode_segment(segment_spec, task, language_id, segment_idx, whisper, tokenizer, transcriptions);
         frames_transcribed += transcriptions[segment_idx].m_end_time * 100;
         seek += (int)(transcriptions[segment_idx].m_end_time * 100);
         segment_idx += 1;
@@ -91,13 +93,13 @@ void capgen::transcribe(std::filesystem::path media_filepath,
         float prog_percentage = (frames_transcribed / total_frames) * max_percentage;
         // We must not exceed max percentage.
         if (prog_percentage <= max_percentage)
-            update_callback(prog_percentage);
+            trx_update_callback(prog_percentage);
         CG_LOG_DEBUG("Transcription progress: (%d%)", (int)prog_percentage);
     }
 
     std::filesystem::path outfilepath = media_filepath.replace_extension("srt");
     capgen::save_to_srt(transcriptions, tokenizer, outfilepath.string());
-    update_callback(100.0f);
+    trx_update_callback(100.0f);
     CG_LOG_MINFO("Transcription Complete");
     timer.stop(segment_idx);
 }
