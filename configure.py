@@ -6,7 +6,7 @@ BASE_PATH = os.path.abspath(os.getcwd())
 
 
 # Libtorch download binaries.
-LIBTORCH_CPU_DOWNLOAD_URL = "unzip libtorch-cxx11-abi-shared-with-deps-1.13.1+cpu.zip"
+LIBTORCH_CPU_DOWNLOAD_URL = "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.13.1%2Bcpu.zip"
 LIBTORCH_DOWNLOAD_PATH = os.path.join(BASE_PATH, "third_party")
 os.chdir(LIBTORCH_DOWNLOAD_PATH)
 

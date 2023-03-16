@@ -9,7 +9,6 @@
 #include <torch/script.h>
 
 #include <cstdlib>
-#include <cmath>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -62,11 +61,6 @@ void capgen::transcribe(std::filesystem::path media_filepath,
     }
 
     int n_segments = capgen::exact_div(spectrogram.size(-1), 3000);
-    // An adjustment to account for the fact that the model does not always transcribe
-    // an segment up to the last frame. That causes longer audio to have extra segments
-    // than calculated above.
-    n_segments += (int)std::round((float)n_segments / 5.0f);
-
     // Contains the transcription for every segment.
     std::vector<capgen::SegmentTranscription> transcriptions;
     transcriptions.reserve(n_segments);
@@ -84,8 +78,8 @@ void capgen::transcribe(std::filesystem::path media_filepath,
     {
         at::Tensor segment_spec = pad_or_trim(spectrogram, seek);
 
-        // capgen::beamsearch_decode_segment(segment_spec, task, language_id, segment_idx, whisper, tokenizer, transcriptions);
-        capgen::greedy_decode_segment(segment_spec, task, language_id, segment_idx, whisper, tokenizer, transcriptions);
+        capgen::beamsearch_decode_segment(segment_spec, task, language_id, segment_idx, whisper, tokenizer, transcriptions);
+        // capgen::greedy_decode_segment(segment_spec, task, language_id, segment_idx, whisper, tokenizer, transcriptions);
         frames_transcribed += transcriptions[segment_idx].m_end_time * 100;
         seek += (int)(transcriptions[segment_idx].m_end_time * 100);
         segment_idx += 1;
