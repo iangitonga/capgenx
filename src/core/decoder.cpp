@@ -178,8 +178,8 @@ void greedy_decode_segment(const at::Tensor& spectrogram,
     at::Tensor tokens;
     if (tokenizer.is_multilingual())
     {
-        int task = (task == capgen::TranscriptionTask::Transcribe) ? tokenizer.transcribe() : tokenizer.translate();
-        tokens = at::tensor({tokenizer.sot(), (int)language_id, task}, tensor_opts);
+        int task_token = (task == capgen::TranscriptionTask::Transcribe) ? tokenizer.transcribe() : tokenizer.translate();
+        tokens = at::tensor({tokenizer.sot(), (int)language_id, task_token}, tensor_opts);
     }
     else
         tokens = at::tensor({tokenizer.sot()}, tensor_opts);
@@ -222,32 +222,43 @@ void beamsearch_decode_segment(const at::Tensor &spectrogram,
     const auto tokens_opts = at::TensorOptions(at::kLong);
     if (tokenizer.is_multilingual())
     {
-        int task = (task == capgen::TranscriptionTask::Transcribe) ? tokenizer.transcribe() : tokenizer.translate();
-        ctx_tokens = at::tensor({tokenizer.sot(), (int)language_id, task}, tokens_opts);
+        int task_token = (task == capgen::TranscriptionTask::Transcribe) ? tokenizer.transcribe() : tokenizer.translate();
+        ctx_tokens = at::tensor({tokenizer.sot(), (int)language_id, task_token}, tokens_opts);
     }
     else
         ctx_tokens = at::tensor({tokenizer.sot()}, tokens_opts);
     ctx_tokens = ctx_tokens.unsqueeze(0);
     ctx_tokens = ctx_tokens.repeat_interleave(n_beam, 0);
 
+    // Keeps track of the sum of log probabilities of the top beams at each iteration.
     std::vector<float> sum_logprobs(n_beam, 0.0);
 
+    // Contains the predicted tokens of the completed beams.
     std::vector<std::vector<uint32_t>> final_beams_tokens;
     final_beams_tokens.reserve(n_beam);
 
+    // Contains the sum of log probabilities of the completed beams.
     std::vector<float> final_beams_logprobs;
     final_beams_logprobs.reserve(n_beam);
 
-    // std::map<at::Tensor, double> scores;
+    // Holds the sum of log probabilities and context tokens of all the considered(expanded) beams
+    // at each iteration. 
     std::vector<std::pair<float, at::Tensor>> scores;
-    auto scores_comp = [](const std::pair<float, at::Tensor> &lhs, const std::pair<float, at::Tensor> &rhs)
-    {
+    auto scores_comp = [](const std::pair<float, at::Tensor> &lhs, const std::pair<float, at::Tensor> &rhs) {
         return lhs.first < rhs.first;
     };
     scores.reserve(n_beam * n_beam);
 
+    // Keeps track of how many beams have been completed.
     uint32_t n_completed = 0;
-    uint32_t cache_idx = segment_index + n_beam + 1;
+    // Controls the kv cache of the model. During the first iteration, the model automatically
+    // caches the computed key and value matrices because we continuously use the same audio
+    // features tensor at each cross attention block. When we complete a beam and reshape the 
+    // audio features tensor, we tell the model to recompute the cache by changing the cache
+    // index value. We would not have to do that if the model could detect and resize by itself
+    // but the model is designed to assume that the two iterations with same cache index should
+    // have the same output and the same shape.
+    uint32_t cache_idx = segment_index;
 
     for (int i = 0; i < model->n_ctx(); ++i)
     {
@@ -273,7 +284,6 @@ void beamsearch_decode_segment(const at::Tensor &spectrogram,
                 at::Tensor prefix = at::cat({ctx_tokens.index({row}).flatten(), top_tokens.index({row, col}).unsqueeze(0)}, 0);
                 scores.push_back(std::make_pair(cumulative_logprob, prefix));
             }
-
 
         sum_logprobs.clear();
         // We don't sort on the first iteration because all the beams have the same predictions and
@@ -316,7 +326,7 @@ void beamsearch_decode_segment(const at::Tensor &spectrogram,
     }
 
     if (!final_beams_tokens.empty()) {
-        // Normalize the log probabilities and pick the transcription with the highest log
+        // Normalize the log probabilities and pick the transcription with the highest sum of log
         // probability.
         float max_logprob = -INFINITY;
         int max_logprob_idx = 0;
@@ -364,7 +374,6 @@ void save_to_srt(const std::vector<SegmentTranscription>& transcription,
                  const std::string& filename)
 {
     std::FILE *outfile = std::fopen(filename.c_str(), "w");
-    // TODO: Put in current dir.
     if (!outfile)
     {
         CG_LOG_ERROR("Failed to create captions srt file at %s", filename.c_str());
@@ -381,7 +390,7 @@ void save_to_srt(const std::vector<SegmentTranscription>& transcription,
             write_time(time_offset + timestamped_trx.m_start_time, outfile, true);
             write_time(time_offset + timestamped_trx.m_end_time, outfile, false);
             for (auto &token : timestamped_trx.m_text_tokens)
-            std::fprintf(outfile, "%s", tokenizer.decode_token(token));
+                std::fprintf(outfile, "%s", tokenizer.decode_token(token));
             std::fprintf(outfile, "\n\n");
         }
         time_offset += segment_trx.m_end_time;

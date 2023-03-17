@@ -36,6 +36,7 @@ static at::Tensor pad_or_trim(at::Tensor &spectrogram, int start_frame_pos)
 void capgen::transcribe(std::filesystem::path media_filepath,
                         std::shared_ptr<Whisper> whisper,
                         TranscriptionTask task,
+                        TranscriptionDecoder decoder,
                         std::function<void()> trx_start_callback,
                         std::function<void(float)> trx_update_callback)
 {
@@ -44,13 +45,13 @@ void capgen::transcribe(std::filesystem::path media_filepath,
     // Load audio and tokenizer.
     const capgen::AudioPreprocessor audio_preprocessor;
     at::Tensor spectrogram = audio_preprocessor.get_audio_spectrogram(media_filepath.c_str());
-    capgen::Tokenizer tokenizer(capgen::TokenizerType::Tk_English);
+    capgen::Tokenizer tokenizer(capgen::TokenizerType::English);
 
     // Detect language spoken in the audio.
     int language_id;
     if (whisper->is_multilingual())
     {
-        tokenizer = std::move(capgen::Tokenizer(capgen::TokenizerType::Tk_Multilingual));
+        tokenizer = std::move(capgen::Tokenizer(capgen::TokenizerType::Multilingual));
         language_id = capgen::detect_language(spectrogram, whisper, tokenizer);
         const char *language_id_str = tokenizer.decode_token(language_id);
         CG_LOG_INFO("Detected language: code=%s,  id=%d", language_id_str, language_id);
@@ -59,8 +60,8 @@ void capgen::transcribe(std::filesystem::path media_filepath,
         language_id = capgen::Tokenizer::s_english_token;
         CG_LOG_MINFO("Using English model");
     }
-
-    int n_segments = capgen::exact_div(spectrogram.size(-1), 3000);
+    const uint32_t frames_per_segment = 3000;
+    int n_segments = capgen::exact_div(spectrogram.size(-1), frames_per_segment);
     // Contains the transcription for every segment.
     std::vector<capgen::SegmentTranscription> transcriptions;
     transcriptions.reserve(n_segments);
@@ -78,8 +79,10 @@ void capgen::transcribe(std::filesystem::path media_filepath,
     {
         at::Tensor segment_spec = pad_or_trim(spectrogram, seek);
 
-        capgen::beamsearch_decode_segment(segment_spec, task, language_id, segment_idx, whisper, tokenizer, transcriptions);
-        // capgen::greedy_decode_segment(segment_spec, task, language_id, segment_idx, whisper, tokenizer, transcriptions);
+        if (decoder == capgen::TranscriptionDecoder::Greedy)
+            capgen::greedy_decode_segment(segment_spec, task, language_id, segment_idx, whisper, tokenizer, transcriptions);
+        else
+            capgen::beamsearch_decode_segment(segment_spec, task, language_id, segment_idx, whisper, tokenizer, transcriptions);
         frames_transcribed += transcriptions[segment_idx].m_end_time * 100;
         seek += (int)(transcriptions[segment_idx].m_end_time * 100);
         segment_idx += 1;

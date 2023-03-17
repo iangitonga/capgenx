@@ -196,8 +196,21 @@ wxPanel *capgen::MainWindow::create_options_toolbar(wxPanel *parent_window)
     model_sizer->AddSpacer(6);
     model_sizer->Add(m_model_choices);
 
+    // Decoding method selector
+    m_decoding_choices = new wxChoice(options_panel, wxID_ANY, wxDefaultPosition, wxSize(180, 28));
+    m_decoding_choices->Append("Best quality");
+    m_decoding_choices->Append("Fastest transcription");
+    m_decoding_choices->Select(0);
+    wxBoxSizer *decoding_sizer = new wxBoxSizer(wxVERTICAL);
+    wxStaticText *decoding_text = new wxStaticText(options_panel, wxID_ANY, "TRANSCRIPT OPTIONS");
+    decoding_text->SetForegroundColour(wxColor(255, 255, 255));
+    decoding_sizer->Add(decoding_text, wxSizerFlags().Align(wxALIGN_CENTER_HORIZONTAL));
+    decoding_sizer->AddSpacer(6);
+    decoding_sizer->Add(m_decoding_choices);
+
     options_panel_sizer->Add(task_sizer, 0, wxGROW | wxLEFT | wxTOP, 10);
     options_panel_sizer->Add(model_sizer, 0, wxGROW | wxLEFT | wxTOP, 10);
+    options_panel_sizer->Add(decoding_sizer, 0, wxGROW | wxLEFT | wxTOP, 10);
 
     return options_panel;
 }
@@ -323,9 +336,9 @@ capgen::TranscriptionWidget::TranscriptionWidget(MainWindow *main_window,
     // Truncate if the path is too long so it fits into the window.
     if (file_desc_path.length() > 50)
         file_desc_path = file_desc_path.substr(0, file_desc_path.length() + 50) + "...";
-    wxStaticText *file_text = new wxStaticText(this, wxID_ANY, file_desc_path);
-    file_text->SetForegroundColour(wxColour(255, 255, 255));
-    file_text->SetFont(bold_font); 
+    m_file_text = new wxStaticText(this, wxID_ANY, file_desc_path);
+    m_file_text->SetForegroundColour(wxColour(255, 255, 255));
+    m_file_text->SetFont(bold_font); 
     m_out_fpath_text = new wxStaticText(this, wxID_ANY, "");
     m_out_fpath_text->SetFont(default_font);
     m_out_fpath_text->SetForegroundColour(wxColour(50, 235, 25));
@@ -349,7 +362,7 @@ capgen::TranscriptionWidget::TranscriptionWidget(MainWindow *main_window,
     wxBoxSizer *main_sizer = new wxBoxSizer(wxVERTICAL);
     const int border_size = 30;
     main_sizer->AddSpacer(20);
-    main_sizer->Add(file_text, 0, wxGROW | wxLEFT, border_size);
+    main_sizer->Add(m_file_text, 0, wxGROW | wxLEFT, border_size);
     main_sizer->AddSpacer(15);
     main_sizer->Add(status_sizer, 0, wxGROW | wxLEFT, border_size);
     main_sizer->AddSpacer(10);
@@ -370,12 +383,14 @@ capgen::TranscriptionWidget::TranscriptionWidget(MainWindow *main_window,
 
 void capgen::TranscriptionWidget::on_trx_thread_completion(wxThreadEvent &event)
 {
+    m_file_text->SetForegroundColour(wxColour(50, 235, 25));
     m_progbar_text->SetLabelText("");
     m_progbar->Hide();
-    m_status_text->SetLabelText("Transcription complete!");
+    m_status_text->Hide();
+
     std::string out_fpath = m_media_filepath.replace_extension("srt").filename().string();
-    if (out_fpath.length() > 50)
-        out_fpath = out_fpath.substr(0, out_fpath.length() + 50) + "...";
+    if (out_fpath.length() > 32)
+        out_fpath = out_fpath.substr(0, out_fpath.length() + 32) + "...";
     std::string label_text = std::string("Transcription file: ") + out_fpath;
     m_out_fpath_text->SetLabelText(label_text);
     m_main_window->notify_current_trx_finished();
@@ -439,8 +454,8 @@ bool capgen::TranscriptionWidget::launch_transcription_task()
     std::string selected_task = m_main_window->get_selected_task();
     capgen::ModelType model_type;
     capgen::TranscriptionTask trx_task;
-    if (selected_task == "English")
-    {
+    capgen::TranscriptionDecoder decoder = m_main_window->get_selected_decoder();
+    if (selected_task == "English") {
         model_type = capgen::ModelType::English;
         trx_task = capgen::TranscriptionTask::Transcribe;
     }
@@ -459,7 +474,7 @@ bool capgen::TranscriptionWidget::launch_transcription_task()
         return false;
     }
 
-    TranscriptionThread *trx_thread = new TranscriptionThread(this, m_media_filepath, selected_model, model_type, trx_task);
+    TranscriptionThread *trx_thread = new TranscriptionThread(this, m_media_filepath, selected_model, model_type, trx_task, decoder);
     if (trx_thread->Run() != wxTHREAD_NO_ERROR)
     {
         CG_LOG_ERROR("Transcription thread failed to run for media file: %s", m_media_filepath.c_str());
@@ -475,9 +490,10 @@ capgen::TranscriptionThread::TranscriptionThread(TranscriptionWidget *widget,
                                                  std::filesystem::path media_filepath,
                                                  std::string &model_name,
                                                  capgen::ModelType model_type,
-                                                 TranscriptionTask task)
+                                                 TranscriptionTask task,
+                                                 TranscriptionDecoder decoder)
   : wxThread(wxTHREAD_DETACHED), m_media_filepath(media_filepath), m_model_name(model_name),
-    m_model_type(model_type), m_widget(widget), m_trx_task(task)
+    m_model_type(model_type), m_widget(widget), m_trx_task(task), m_decoder(decoder)
   {}
 
 capgen::TranscriptionThread::~TranscriptionThread() 
@@ -507,7 +523,7 @@ void *capgen::TranscriptionThread::Entry()
         {
             Application& app = wxGetApp();
             auto model = app.models_manager.get_model(m_model_name, m_model_type);
-            capgen::transcribe(m_media_filepath, model, m_trx_task, trx_start_callback, trx_update_callback);
+            capgen::transcribe(m_media_filepath, model, m_trx_task, m_decoder, trx_start_callback, trx_update_callback);
             wxQueueEvent(m_widget, new wxThreadEvent(EVT_TRX_THREAD_COMPLETED));
         }
         catch (MediaDecodingException e)

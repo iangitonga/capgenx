@@ -14,20 +14,18 @@ After downloading, unzip the archive and run the application executable.
 - Source language transcription of audio and video.
 - Source language to English translation.
 - Tiny, base and small models available.
+- Beamsearch and greedy decoding methods are available.
 
-## Limitations
-As of now, Capgen is in development and lacks many important features but
-that will change as new features get integrated. Some of the limitations are:
-
-- No GPU support. Libtorch GPU library integration has not been tested.
-- Only tested on Linux. Windows and Mac will be supported in the future.
+## TODO list
+- Support Windows and Mac platforms.
+- Provide GPU support.
 
 ## Architecture
 Capgen is written entirely in C++ and C. It depends on the following libraries:
 
-- [FFmpeg](https://github.com/FFmpeg/FFmpeg): Used to decode audio and video files.
-- [Libtorch](https://pytorch.org/cppdocs/index.html): Handles audio preprocessing, loads the models and performs inference.
-- [wxWidgets](https://www.wxwidgets.org/): Handles the graphical user interface.
+- [FFmpeg](https://github.com/FFmpeg/FFmpeg): Used to decode media files.
+- [Libtorch](https://pytorch.org/cppdocs/index.html):Performs inference.
+- [wxWidgets](https://www.wxwidgets.org/): Provides the graphical user interface.
 
 ## Build process(Linux platform)
 **Capgen is designed so that it can be used on Linux, Windows and Mac but 

@@ -37,32 +37,32 @@ file(GLOB_RECURSE SRC_FILES src/*.c src/*.cpp)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin/")
 
 add_executable(Capgen ${SRC_FILES})
-set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
+set_property(TARGET Capgen PROPERTY CXX_STANDARD 17)
 
 # Capgen include
-target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_SOURCE_DIR}/src/")
+target_include_directories(Capgen PUBLIC "${CMAKE_SOURCE_DIR}/src/")
 
 # FFmpeg library. Linked statically.
-target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/include")
-target_link_libraries(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libavformat.a")
-target_link_libraries(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libavcodec.a")
-target_link_libraries(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libswscale.a")
-target_link_libraries(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libavutil.a")
-target_link_libraries(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libavfilter.a")
-target_link_libraries(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libswresample.a")
-target_link_libraries(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libavdevice.a")
+target_include_directories(Capgen PUBLIC "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/include")
+target_link_libraries(Capgen "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libavformat.a")
+target_link_libraries(Capgen "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libavcodec.a")
+target_link_libraries(Capgen "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libswscale.a")
+target_link_libraries(Capgen "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libavutil.a")
+target_link_libraries(Capgen "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libavfilter.a")
+target_link_libraries(Capgen "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libswresample.a")
+target_link_libraries(Capgen "${CMAKE_SOURCE_DIR}/third_party/ffmpeg/build_capgen/lib/libavdevice.a")
 
 # Math and compression libraries required by FFmpeg. Linked dynamically.
-target_link_libraries(${PROJECT_NAME} m)
-target_link_libraries(${PROJECT_NAME} lzma)
-target_link_libraries(${PROJECT_NAME} z)
-target_link_libraries(${PROJECT_NAME} bz2)
+target_link_libraries(Capgen m)
+target_link_libraries(Capgen lzma)
+target_link_libraries(Capgen z)
+target_link_libraries(Capgen bz2)
 
 # Torch library. Linked dynamically.
-target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES})
+target_link_libraries(Capgen ${TORCH_LIBRARIES})
 
 # Wxwidgets
-target_link_libraries(${PROJECT_NAME} wx::net wx::core wx::base)
+target_link_libraries(Capgen wx::net wx::core wx::base)
 
 
 # Search path for shared libraries that we distribute alongside the application.

@@ -7,7 +7,7 @@ namespace capgen {
 Tokenizer::Tokenizer(TokenizerType tokenizer_type)
 {
     m_tokenizer_type = tokenizer_type;
-    if (m_tokenizer_type == TokenizerType::Tk_English)
+    if (m_tokenizer_type == TokenizerType::English)
         init_english_tokenizer();
     else
         init_multilingual_tokenizer();
@@ -87,7 +87,7 @@ void Tokenizer::init_multilingual_tokenizer()
 
 bool Tokenizer::is_multilingual() const
 {
-    return m_tokenizer_type == TokenizerType::Tk_Multilingual;
+    return m_tokenizer_type == TokenizerType::Multilingual;
 }
 
 const char* const Tokenizer::decode_token(int token) const
@@ -116,17 +116,17 @@ bool Tokenizer::is_timestamp(int token) const
 
 void Tokenizer::load_vocabulary()
 {
-    FILE* vocab_file = fopen(m_vocab_filepath.c_str(), "r");
+    FILE* vocab_file = std::fopen(m_vocab_filepath.c_str(), "r");
     if (!vocab_file) {
         CG_LOG_ERROR("Failed to open vocab file: %s", m_vocab_filepath.c_str());
         throw std::exception();
     }
 
-    char char_hold;
+    uint8_t char_hold;
     for (int token_offset = 0; token_offset < m_vocab_bufsize; token_offset += m_word_size)
     {
-        int char_idx = 0;
-        while((char_hold = fgetc(vocab_file)) != EOF && char_hold != '\n' && char_idx < m_word_size - 1)
+        uint32_t char_idx = 0;
+        while((char_hold = std::fgetc(vocab_file)) != EOF && char_hold != '\n' && char_idx < m_word_size - 1)
         {
           m_vocab[token_offset + char_idx] = char_hold;
           char_idx += 1;

@@ -6,7 +6,7 @@
 
 namespace capgen {
 
-enum ModelType {
+enum class ModelType {
   English,
   Multilingual
 };

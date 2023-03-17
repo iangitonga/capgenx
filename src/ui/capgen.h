@@ -52,11 +52,17 @@ public:
     void notify_current_trx_finished();
     std::string get_selected_task() const { return m_task_choices->GetStringSelection().ToStdString(); }
     std::string get_selected_model() const { return m_model_choices->GetStringSelection().ToStdString(); }
+    TranscriptionDecoder get_selected_decoder() const {
+        return m_decoding_choices->GetStringSelection().ToStdString() == "Best quality"
+        ? TranscriptionDecoder::BeamSearch
+        : TranscriptionDecoder::Greedy;
+    }
 
 private:
     Application& m_app;
     wxChoice *m_model_choices;
     wxChoice *m_task_choices;
+    wxChoice *m_decoding_choices;
     wxScrolledWindow *m_content_window;
     wxSizer *m_content_sizer;
     wxPanel *m_default_trx_widget;
@@ -114,6 +120,7 @@ public:
 private:
     MainWindow *m_main_window;
     std::filesystem::path m_media_filepath;
+    wxStaticText *m_file_text;
     wxGauge *m_progbar;
     wxStaticText *m_progbar_text;
     wxStaticText *m_out_fpath_text;
@@ -139,7 +146,8 @@ public:
                         std::filesystem::path m_media_filepath,
                         std::string &model_name,
                         ModelType model_type,
-                        TranscriptionTask task);
+                        TranscriptionTask task,
+                        TranscriptionDecoder decoder);
     ~TranscriptionThread();
     virtual void *Entry();
 
@@ -149,6 +157,7 @@ private:
     std::string m_model_name;
     ModelType m_model_type;
     TranscriptionTask m_trx_task;
+    TranscriptionDecoder m_decoder;
 };
 
 // Transcription thread events.

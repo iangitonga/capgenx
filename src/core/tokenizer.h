@@ -10,10 +10,7 @@ namespace capgen {
 /// We only have two tokenizer types, namely, English tokenizer whose vocabulary
 /// contains english words only and multilingual conterpart whose vocabulary contains
 /// english and other languages words.
-enum TokenizerType {
-    Tk_English,
-    Tk_Multilingual
-};
+enum class TokenizerType { English, Multilingual };
 
 
 class Tokenizer {
@@ -84,8 +81,7 @@ private:
     // maps to token value 0. That allows for very fast decoding because we can index a
     // word directly by adding an offset to to the buffer pointer. We could potentially
     // use something like hash map to make it much simpler but we would have to allocate 
-    // memory for each slot independently which would lead to awful memory fragmentation
-    // plus the overhead of creating the map structure.
+    // memory for each slot independently which would lead to bad memory fragmentation.
     // TODO: Can we embed the whole dictionary in the source.
     char *m_vocab;
 
